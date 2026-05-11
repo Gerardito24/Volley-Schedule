@@ -1,11 +1,21 @@
 import type { TournamentMock } from "@/lib/mock-data";
 
-/** Demo tournaments first; locally stored entries only add slugs not already in the seed list. */
+/**
+ * Lista para admin: torneos seed sustituidos por copia local si existe el mismo slug,
+ * más entradas solo en localStorage.
+ */
 export function mergeAdminTournaments(
   seed: TournamentMock[],
   stored: TournamentMock[],
 ): TournamentMock[] {
+  const storedBySlug = new Map(stored.map((t) => [t.slug, t]));
   const seedSlugs = new Set(seed.map((t) => t.slug));
-  const extra = stored.filter((t) => !seedSlugs.has(t.slug));
-  return [...seed, ...extra];
+  const out: TournamentMock[] = [];
+  for (const t of seed) {
+    out.push(storedBySlug.get(t.slug) ?? t);
+  }
+  for (const t of stored) {
+    if (!seedSlugs.has(t.slug)) out.push(t);
+  }
+  return out;
 }

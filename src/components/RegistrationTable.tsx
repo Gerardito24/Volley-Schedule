@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import type { RegistrationRowMock } from "@/lib/mock-data";
+import { upsertStoredRegistration } from "@/lib/local-registrations";
 
 function formatMoney(cents: number) {
   return new Intl.NumberFormat("es-PR", {
@@ -49,9 +50,12 @@ function rowsToCsv(rows: RegistrationRowMock[]) {
 export function RegistrationTable({
   rows,
   hideTournamentColumn,
+  allowLocalStatusEdit,
 }: {
   rows: RegistrationRowMock[];
   hideTournamentColumn?: boolean;
+  /** Demo: guardar nuevo estado en localStorage y refrescar tablas mergeadas. */
+  allowLocalStatusEdit?: boolean;
 }) {
   const csvBlobUrl = useMemo(() => {
     const csv = rowsToCsv(rows);
@@ -67,7 +71,8 @@ export function RegistrationTable({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          Vista previa con datos mock. Conectar Supabase en una siguiente iteración.
+          Demo: datos seed + inscripciones guardadas en este navegador. Conectar
+          Supabase en una siguiente iteración.
         </p>
         <a
           href={csvBlobUrl}
@@ -95,6 +100,11 @@ export function RegistrationTable({
               <th className="px-4 py-3 text-left font-medium text-zinc-700 dark:text-zinc-300">
                 Estado
               </th>
+              {allowLocalStatusEdit ? (
+                <th className="px-4 py-3 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                  Cambiar (local)
+                </th>
+              ) : null}
               <th className="px-4 py-3 text-right font-medium text-zinc-700 dark:text-zinc-300">
                 Tarifa
               </th>
@@ -120,6 +130,31 @@ export function RegistrationTable({
                 <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
                   {statusLabels[r.status]}
                 </td>
+                {allowLocalStatusEdit ? (
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <select
+                      aria-label={`Estado para ${r.teamName}`}
+                      value={r.status}
+                      onChange={(e) => {
+                        const status = e.target.value as RegistrationRowMock["status"];
+                        upsertStoredRegistration({
+                          ...r,
+                          status,
+                          updatedAt: new Date().toISOString().slice(0, 10),
+                        });
+                      }}
+                      className="max-w-[11rem] rounded border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-950"
+                    >
+                      {(Object.keys(statusLabels) as RegistrationRowMock["status"][]).map(
+                        (s) => (
+                          <option key={s} value={s}>
+                            {statusLabels[s]}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </td>
+                ) : null}
                 <td className="whitespace-nowrap px-4 py-3 text-right text-zinc-900 dark:text-zinc-100">
                   {formatMoney(r.feeCents)}
                 </td>

@@ -1,6 +1,12 @@
+import type { TournamentScheduleMock } from "@/lib/schedule-types";
+
+export type { TournamentScheduleMock } from "@/lib/schedule-types";
+
 export type SubdivisionMock = {
   id: string;
   label: string;
+  /** Cupo por subdivisión; null si el cupo vive solo a nivel categoría. */
+  maxTeams: number | null;
 };
 
 export type CategoryMock = {
@@ -24,6 +30,8 @@ export type TournamentMock = {
   promoImageDataUrl: string | null;
   status: "open" | "closed" | "draft";
   categories: CategoryMock[];
+  /** Itinerario / brackets; undefined/null = no generado aún. */
+  schedule?: TournamentScheduleMock | null;
 };
 
 export type RegistrationRowMock = {
@@ -42,6 +50,10 @@ export type RegistrationRowMock = {
     | "waitlisted";
   updatedAt: string;
   feeCents: number;
+  /** ISO 8601; orden de seeds en bracket = ascendente por esta fecha. */
+  registeredAt: string;
+  categoryId: string;
+  subdivisionId?: string | null;
 };
 
 export const tournaments: TournamentMock[] = [
@@ -120,9 +132,12 @@ export const registrationRows: RegistrationRowMock[] = [
     tournamentName: "Copa 30 Summer",
     divisionLabel: "16U Masculino",
     teamName: "Las Piedras VC",
-    status: "pending_payment",
+    status: "paid",
     updatedAt: "2026-05-01",
     feeCents: 27500,
+    registeredAt: "2026-05-01T14:00:00.000Z",
+    categoryId: "d2",
+    subdivisionId: null,
   },
   {
     id: "r2",
@@ -133,6 +148,22 @@ export const registrationRows: RegistrationRowMock[] = [
     status: "approved",
     updatedAt: "2026-05-02",
     feeCents: 25000,
+    registeredAt: "2026-05-02T16:30:00.000Z",
+    categoryId: "d1",
+    subdivisionId: null,
+  },
+  {
+    id: "r4",
+    tournamentSlug: "copa-30-summer-2026",
+    tournamentName: "Copa 30 Summer",
+    divisionLabel: "14U Femenino",
+    teamName: "Bayamón Youth",
+    status: "paid",
+    updatedAt: "2026-05-03",
+    feeCents: 25000,
+    registeredAt: "2026-05-03T11:00:00.000Z",
+    categoryId: "d1",
+    subdivisionId: null,
   },
   {
     id: "r3",
@@ -143,6 +174,9 @@ export const registrationRows: RegistrationRowMock[] = [
     status: "under_review",
     updatedAt: "2026-05-03",
     feeCents: 29000,
+    registeredAt: "2026-05-03T09:00:00.000Z",
+    categoryId: "d5",
+    subdivisionId: null,
   },
 ];
 

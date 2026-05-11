@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { PublicTournamentSchedule } from "@/components/PublicTournamentSchedule";
 import { getTournamentBySlug } from "@/lib/mock-data";
 import { effectiveCategoryFeeCents } from "@/lib/tournament-pricing";
 
@@ -87,7 +88,14 @@ export default async function TournamentDetailPage(props: Props) {
                 </div>
                 {c.subdivisions.length > 0 ? (
                   <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
-                    Divisiones: {c.subdivisions.map((s) => s.label).join(", ")}
+                    Divisiones:{" "}
+                    {c.subdivisions
+                      .map((s) =>
+                        s.maxTeams != null
+                          ? `${s.label} (máx. ${s.maxTeams} equipos)`
+                          : s.label,
+                      )
+                      .join(", ")}
                   </p>
                 ) : null}
               </li>
@@ -95,6 +103,8 @@ export default async function TournamentDetailPage(props: Props) {
           })}
         </ul>
       </section>
+
+      <PublicTournamentSchedule slug={slug} />
 
       <div>
         {open ? (

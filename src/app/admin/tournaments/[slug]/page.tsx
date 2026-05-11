@@ -2,15 +2,13 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { RegistrationTable } from "@/components/RegistrationTable";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { TournamentSchedulePanel } from "@/components/admin/TournamentSchedulePanel";
+import { MergedRegistrationsTable } from "@/components/MergedRegistrationsTable";
 import { readStoredTournaments } from "@/lib/local-tournaments";
 import { mergeAdminTournaments } from "@/lib/merge-tournaments";
 import type { TournamentMock } from "@/lib/mock-data";
-import {
-  getRegistrationsByTournamentSlug,
-  tournaments as seedTournaments,
-} from "@/lib/mock-data";
+import { tournaments as seedTournaments } from "@/lib/mock-data";
 import { effectiveCategoryFeeCents } from "@/lib/tournament-pricing";
 
 const statusLabel: Record<TournamentMock["status"], string> = {
@@ -40,18 +38,17 @@ export default function AdminTournamentDetailPage() {
     mergeAdminTournaments(seedTournaments, readStoredTournaments()),
   );
 
-  useEffect(() => {
+  const refreshMerged = useCallback(() => {
     setMerged(mergeAdminTournaments(seedTournaments, readStoredTournaments()));
-  }, [slug]);
+  }, []);
+
+  useEffect(() => {
+    refreshMerged();
+  }, [slug, refreshMerged]);
 
   const tournament = useMemo(
     () => merged.find((t) => t.slug === slug),
     [merged, slug],
-  );
-
-  const registrationRows = useMemo(
-    () => getRegistrationsByTournamentSlug(slug),
-    [slug],
   );
 
   if (!slug) {
@@ -183,7 +180,13 @@ export default function AdminTournamentDetailPage() {
                 {c.subdivisions.length > 0 ? (
                   <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
                     Divisiones:{" "}
-                    {c.subdivisions.map((s) => s.label).join(", ")}
+                    {c.subdivisions
+                      .map((s) =>
+                        s.maxTeams != null
+                          ? `${s.label} (máx. ${s.maxTeams} equipos)`
+                          : s.label,
+                      )
+                      .join(", ")}
                   </p>
                 ) : (
                   <p className="mt-2 text-xs text-zinc-500">
@@ -196,6 +199,11 @@ export default function AdminTournamentDetailPage() {
         </ul>
       </section>
 
+      <TournamentSchedulePanel
+        tournament={tournament}
+        onScheduleSaved={refreshMerged}
+      />
+
       <section>
         <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
           Inscripciones
@@ -204,7 +212,10 @@ export default function AdminTournamentDetailPage() {
           Filtradas a este torneo (datos mock hasta conectar Supabase).
         </p>
         <div className="mt-6">
-          <RegistrationTable rows={registrationRows} hideTournamentColumn />
+          <MergedRegistrationsTable
+            tournamentSlug={slug}
+            hideTournamentColumn
+          />
         </div>
       </section>
     </main>

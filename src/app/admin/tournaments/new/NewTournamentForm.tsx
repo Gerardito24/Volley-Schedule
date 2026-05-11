@@ -13,6 +13,7 @@ const PROMO_MAX_BYTES = 400 * 1024;
 type SubdivisionFormRow = {
   key: string;
   label: string;
+  maxTeams: string;
 };
 
 type CategoryFormRow = {
@@ -55,6 +56,8 @@ export function NewTournamentForm() {
   const [tournamentStartsOn, setTournamentStartsOn] = useState("");
   const [tournamentEndsOn, setTournamentEndsOn] = useState("");
   const [registrationFeeBaseUsd, setRegistrationFeeBaseUsd] = useState("");
+  /** Si es true, cada categoría debe tener su propia tarifa (no usa solo la base). */
+  const [allowPerCategoryFees, setAllowPerCategoryFees] = useState(false);
   const [publicEntryFeeUsd, setPublicEntryFeeUsd] = useState("");
   const [promoImageDataUrl, setPromoImageDataUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<TournamentMock["status"]>("draft");
@@ -96,41 +99,41 @@ export function NewTournamentForm() {
 
   function addSubdivision(catKey: string) {
     setCategories((rows) =>
-      rows.map((r) =>
-        r.key === catKey
-          ? {
-              ...r,
-              subdivisions: [
-                ...r.subdivisions,
-                { key: crypto.randomUUID(), label: "" },
-              ],
-            }
-          : r,
-      ),
+      rows.map((r) => {
+        if (r.key !== catKey) return r;
+        const nextSubs = [
+          ...r.subdivisions,
+          { key: crypto.randomUUID(), label: "", maxTeams: "" },
+        ];
+        const patch: Partial<CategoryFormRow> = { subdivisions: nextSubs };
+        if (nextSubs.length > 1) patch.maxTeams = "";
+        return { ...r, ...patch };
+      }),
     );
   }
 
   function removeSubdivision(catKey: string, subKey: string) {
     setCategories((rows) =>
-      rows.map((r) =>
-        r.key === catKey
-          ? {
-              ...r,
-              subdivisions: r.subdivisions.filter((s) => s.key !== subKey),
-            }
-          : r,
-      ),
+      rows.map((r) => {
+        if (r.key !== catKey) return r;
+        const nextSubs = r.subdivisions.filter((s) => s.key !== subKey);
+        return { ...r, subdivisions: nextSubs };
+      }),
     );
   }
 
-  function updateSubdivision(catKey: string, subKey: string, label: string) {
+  function updateSubdivision(
+    catKey: string,
+    subKey: string,
+    patch: Partial<Pick<SubdivisionFormRow, "label" | "maxTeams">>,
+  ) {
     setCategories((rows) =>
       rows.map((r) =>
         r.key === catKey
           ? {
               ...r,
               subdivisions: r.subdivisions.map((s) =>
-                s.key === subKey ? { ...s, label } : s,
+                s.key === subKey ? { ...s, ...patch } : s,
               ),
             }
           : r,
@@ -186,12 +189,16 @@ export function NewTournamentForm() {
       return;
     }
 
+    if (!registrationFeeBaseUsd.trim()) {
+      setError("El costo de inscripción base es obligatorio.");
+      return;
+    }
     const registrationFeeCents = parseFeeToCents(registrationFeeBaseUsd);
-    if (registrationFeeBaseUsd.trim() && registrationFeeCents === null) {
+    if (registrationFeeCents === null) {
       setError("Tarifa base de inscripción inválida.");
       return;
     }
-    const base = registrationFeeBaseUsd.trim() ? registrationFeeCents : null;
+    const base = registrationFeeCents;
 
     const publicEntryParsed = parseFeeToCents(publicEntryFeeUsd);
     if (publicEntryFeeUsd.trim() && publicEntryParsed === null) {
@@ -210,7 +217,11 @@ export function NewTournamentForm() {
       }
 
       let catFee: number | null = null;
-      if (row.feeUsd.trim()) {
+      if (allowPerCategoryFees) {
+        if (!row.feeUsd.trim()) {
+          setError(`Categoría ${i + 1}: indica la tarifa de inscripción de esta categoría.`);
+          return;
+        }
         const c = parseFeeToCents(row.feeUsd.trim());
         if (c === null) {
           setError(`Categoría ${i + 1}: tarifa inválida.`);
@@ -219,24 +230,22 @@ export function NewTournamentForm() {
         catFee = c;
       }
 
-      if (catFee === null && base === null) {
-        setError(
-          `Categoría ${i + 1}: indica tarifa en la categoría o define una tarifa base del torneo.`,
-        );
-        return;
-      }
+      const multiDiv = row.subdivisions.length > 1;
 
       let maxTeams: number | null = null;
-      if (row.maxTeams.trim()) {
-        const m = Number.parseInt(row.maxTeams.trim(), 10);
-        if (Number.isNaN(m) || m < 1) {
-          setError(`Categoría ${i + 1}: cupo máximo inválido.`);
-          return;
+      if (!multiDiv) {
+        if (row.maxTeams.trim()) {
+          const m = Number.parseInt(row.maxTeams.trim(), 10);
+          if (Number.isNaN(m) || m < 1) {
+            setError(`Categoría ${i + 1}: cupo máximo inválido.`);
+            return;
+          }
+          maxTeams = m;
         }
-        maxTeams = m;
       }
 
-      const subs: { id: string; label: string }[] = [];
+      const subs: { id: string; label: string; maxTeams: number | null }[] = [];
+      let sumSubCaps = 0;
       for (let j = 0; j < row.subdivisions.length; j++) {
         const sub = row.subdivisions[j];
         const lab = sub.label.trim();
@@ -244,7 +253,31 @@ export function NewTournamentForm() {
           setError(`Categoría ${i + 1}, subdivisión ${j + 1}: indica etiqueta o quítala.`);
           return;
         }
-        subs.push({ id: `local-sub-${crypto.randomUUID()}`, label: lab });
+        let subMax: number | null = null;
+        if (multiDiv) {
+          if (!sub.maxTeams.trim()) {
+            setError(
+              `Categoría ${i + 1}, subdivisión "${lab || j + 1}": indica cupo máximo de equipos.`,
+            );
+            return;
+          }
+          const sm = Number.parseInt(sub.maxTeams.trim(), 10);
+          if (Number.isNaN(sm) || sm < 1) {
+            setError(`Categoría ${i + 1}, subdivisión ${j + 1}: cupo inválido.`);
+            return;
+          }
+          subMax = sm;
+          sumSubCaps += sm;
+        }
+        subs.push({
+          id: `local-sub-${crypto.randomUUID()}`,
+          label: lab,
+          maxTeams: subMax,
+        });
+      }
+
+      if (multiDiv) {
+        maxTeams = sumSubCaps;
       }
 
       categoryPayload.push({
@@ -367,22 +400,42 @@ export function NewTournamentForm() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <div>
+          <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
-              Costo inscripción base (USD, opcional)
+              Costo inscripción base (USD)
             </label>
             <p className="mt-0.5 text-xs text-zinc-500">
-              Las categorías pueden dejar su tarifa vacía para usar esta base.
+              Tarifa por defecto del torneo. Activa la opción de abajo solo si alguna categoría cobrará distinto.
             </p>
             <input
+              required
               inputMode="decimal"
               placeholder="Ej. 250"
               value={registrationFeeBaseUsd}
               onChange={(e) => setRegistrationFeeBaseUsd(e.target.value)}
               className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
             />
+            <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={allowPerCategoryFees}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setAllowPerCategoryFees(on);
+                  if (!on) {
+                    setCategories((rows) =>
+                      rows.map((r) => ({ ...r, feeUsd: "" })),
+                    );
+                  }
+                }}
+                className="mt-0.5 rounded border-zinc-300"
+              />
+              <span>
+                Definir tarifa de inscripción distinta por categoría (si no está marcado, todas usan la base).
+              </span>
+            </label>
           </div>
-          <div>
+          <div className="sm:col-span-2 sm:max-w-md">
             <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">
               Entrada público al torneo (USD, opcional)
             </label>
@@ -463,7 +516,16 @@ export function NewTournamentForm() {
           </button>
         </div>
         <ul className="space-y-4">
-          {categories.map((row, idx) => (
+          {categories.map((row, idx) => {
+            const multiDiv = row.subdivisions.length > 1;
+            const subCapSum = multiDiv
+              ? row.subdivisions.reduce((acc, s) => {
+                  const n = Number.parseInt(s.maxTeams.trim(), 10);
+                  return acc + (Number.isNaN(n) || n < 1 ? 0 : n);
+                }, 0)
+              : 0;
+
+            return (
             <li
               key={row.key}
               className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700"
@@ -497,30 +559,36 @@ export function NewTournamentForm() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Tarifa inscripción (USD, opcional si hay base)
+                    {allowPerCategoryFees
+                      ? "Tarifa inscripción categoría (USD)"
+                      : "Tarifa inscripción (usa la tarifa base)"}
                   </label>
                   <input
                     inputMode="decimal"
-                    placeholder="250"
+                    placeholder={allowPerCategoryFees ? "Ej. 275" : "—"}
                     value={row.feeUsd}
+                    disabled={!allowPerCategoryFees}
                     onChange={(e) =>
                       updateCategory(row.key, { feeUsd: e.target.value })
                     }
-                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500 dark:border-zinc-600 dark:bg-zinc-950 dark:disabled:bg-zinc-900 dark:disabled:text-zinc-500"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Cupo máx. equipos (opcional)
+                    {multiDiv
+                      ? "Cupo total categoría (suma divisiones)"
+                      : "Cupo máx. equipos (opcional)"}
                   </label>
                   <input
                     inputMode="numeric"
-                    placeholder="16"
-                    value={row.maxTeams}
+                    placeholder={multiDiv ? "—" : "16"}
+                    value={multiDiv ? String(subCapSum) : row.maxTeams}
+                    disabled={multiDiv}
                     onChange={(e) =>
                       updateCategory(row.key, { maxTeams: e.target.value })
                     }
-                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-950 dark:disabled:bg-zinc-900"
                   />
                 </div>
               </div>
@@ -543,31 +611,55 @@ export function NewTournamentForm() {
                     Sin subdivisión: la categoría es una sola lista de equipos.
                   </p>
                 ) : (
-                  <ul className="mt-3 space-y-2">
-                    {row.subdivisions.map((sub, sidx) => (
-                      <li key={sub.key} className="flex gap-2">
-                        <input
-                          placeholder={`Etiqueta subdivisión ${sidx + 1}`}
-                          value={sub.label}
-                          onChange={(e) =>
-                            updateSubdivision(row.key, sub.key, e.target.value)
-                          }
-                          className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeSubdivision(row.key, sub.key)}
-                          className="shrink-0 text-xs text-red-600 hover:underline dark:text-red-400"
-                        >
-                          Quitar
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                  <>
+                    {multiDiv ? (
+                      <p className="mt-2 text-xs text-zinc-500">
+                        Hay más de una división: indica el cupo máximo por cada una; el total de la categoría se calcula solo.
+                      </p>
+                    ) : null}
+                    <ul className="mt-3 space-y-2">
+                      {row.subdivisions.map((sub, sidx) => (
+                        <li key={sub.key} className="flex flex-wrap items-center gap-2">
+                          <input
+                            placeholder={`Etiqueta subdivisión ${sidx + 1}`}
+                            value={sub.label}
+                            onChange={(e) =>
+                              updateSubdivision(row.key, sub.key, {
+                                label: e.target.value,
+                              })
+                            }
+                            className="min-w-[8rem] flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                          />
+                          {multiDiv ? (
+                            <input
+                              inputMode="numeric"
+                              placeholder="Cupo"
+                              value={sub.maxTeams}
+                              onChange={(e) =>
+                                updateSubdivision(row.key, sub.key, {
+                                  maxTeams: e.target.value,
+                                })
+                              }
+                              className="w-24 shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                              aria-label={`Cupo subdivisión ${sidx + 1}`}
+                            />
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => removeSubdivision(row.key, sub.key)}
+                            className="shrink-0 text-xs text-red-600 hover:underline dark:text-red-400"
+                          >
+                            Quitar
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
                 )}
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       </div>
 

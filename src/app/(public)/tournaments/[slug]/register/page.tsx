@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { TournamentRegisterForm } from "@/components/TournamentRegisterForm";
 import { getTournamentBySlug } from "@/lib/mock-data";
 import { effectiveCategoryFeeCents } from "@/lib/tournament-pricing";
 
@@ -22,10 +23,24 @@ export default async function RegisterPage(props: Props) {
     const feeStr = eff != null ? formatMoney(eff) : "—";
     const subs =
       c.subdivisions.length > 0
-        ? ` (${c.subdivisions.map((s) => s.label).join(", ")})`
+        ? ` (${c.subdivisions
+            .map((s) =>
+              s.maxTeams != null
+                ? `${s.label} máx. ${s.maxTeams}`
+                : s.label,
+            )
+            .join(", ")})`
         : "";
     return `${c.label}${subs}: ${feeStr}`;
   });
+
+  const registerPayload = {
+    slug: tournament.slug,
+    name: tournament.name,
+    registrationDeadlineOn: tournament.registrationDeadlineOn,
+    categories: tournament.categories,
+    registrationFeeCents: tournament.registrationFeeCents,
+  };
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-8 px-4 py-10">
@@ -40,16 +55,14 @@ export default async function RegisterPage(props: Props) {
           Inscripción (demo)
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Flujo público para equipos (website). Autenticación Supabase, Stripe y persistencia
-          en una siguiente iteración.
+          Los datos se guardan en este navegador (localStorage). Pagos y revisión
+          por el organizador marcarán el estado para el itinerario.
         </p>
       </div>
 
       <ol className="list-decimal space-y-3 pl-5 text-sm text-zinc-700 dark:text-zinc-300">
-        <li>Elegir categoría (y subdivisión si aplica) y confirmar tarifa.</li>
-        <li>Datos del equipo y contacto (coach / manager).</li>
-        <li>Pago en línea o referencia de transferencia.</li>
-        <li>Subir roster / waiver según reglas del torneo.</li>
+        <li>Elegir categoría (y subdivisión si aplica) y nombre del equipo.</li>
+        <li>Contacto, pago y documentos en una iteración con Supabase / Stripe.</li>
       </ol>
 
       <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 p-6 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-400">
@@ -62,6 +75,8 @@ export default async function RegisterPage(props: Props) {
           ))}
         </ul>
       </div>
+
+      <TournamentRegisterForm tournament={registerPayload} />
     </main>
   );
 }
