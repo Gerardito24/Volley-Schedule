@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# VolleySchedule — registro de torneos
 
-## Getting Started
+Aplicación web (Next.js) para **centralizar inscripciones** que hoy se dispersan en múltiples formularios Cognito desde [volleyschedule.com](https://www.volleyschedule.com/).
 
-First, run the development server:
+## Documentación del plan
+
+| Documento | Contenido |
+|-----------|-------------|
+| [docs/DISCOVERY.md](docs/DISCOVERY.md) | Checklist con el cliente, campos inferidos, cobro y roster |
+| [docs/STACK.md](docs/STACK.md) | Next.js, Supabase, Stripe, hosting |
+| [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Entidades MVP y diagrama |
+| [docs/WIREFRAMES.md](docs/WIREFRAMES.md) | Layout equipos vs admin |
+| [docs/VOLLEYSCHEDULE_INTEGRATION.md](docs/VOLLEYSCHEDULE_INTEGRATION.md) | Subdominio y sustitución de enlaces Cognito |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Primer deploy en Vercel (staging) |
+
+## Esquema base de datos
+
+SQL inicial para Supabase: [supabase/migrations/001_initial_schema.sql](supabase/migrations/001_initial_schema.sql).
+
+## Desarrollo local
 
 ```bash
+cd volleyschedule-registrations
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Copiar `.env.example` a `.env.local` cuando se conecte Supabase.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Rutas MVP (mock)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Sitio público (preview) bajo [`src/app/(public)/`](src/app/%28public%29/layout.tsx); panel organizador en `src/app/admin/` sin barra del website.
 
-## Learn More
+- `/` — landing
+- `/tournaments` — lista de torneos
+- `/tournaments/[slug]` — detalle
+- `/tournaments/[slug]/register` — placeholder del flujo de inscripción
+- `/admin` — inicio del panel (accesos a módulos)
+- `/admin/tournaments` — lista admin (mock + torneos en localStorage)
+- `/admin/tournaments/new` — crear torneo (guarda en localStorage)
+- `/admin/tournaments/[slug]` — panel del torneo (categorías + inscripciones filtradas)
+- `/admin/registrations` — tabla global + export CSV (datos mock)
 
-To learn more about Next.js, take a look at the following resources:
+## Siguientes pasos técnicos
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Proyecto Supabase + políticas RLS.
+2. Auth (magic link o email/password) y perfiles `organizer` / `team_manager`.
+3. Stripe Checkout y webhook para actualizar `registrations.status`.
