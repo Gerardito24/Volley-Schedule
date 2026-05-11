@@ -6,6 +6,8 @@ Aplicación web (Next.js) para **centralizar inscripciones** que hoy se dispersa
 
 | Documento | Contenido |
 |-----------|-------------|
+| [docs/GIT.md](docs/GIT.md) | Cómo guardar cambios en Git (incluidos los `.md`), commit y push |
+| [docs/SCHEDULE.md](docs/SCHEDULE.md) | Itinerario, brackets, auto-asignación de canchas y validación |
 | [docs/DISCOVERY.md](docs/DISCOVERY.md) | Checklist con el cliente, campos inferidos, cobro y roster |
 | [docs/STACK.md](docs/STACK.md) | Next.js, Supabase, Stripe, hosting |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Entidades MVP y diagrama |
