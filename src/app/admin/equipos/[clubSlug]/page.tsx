@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { readStoredRegistrations, LOCAL_REGISTRATIONS_KEY } from "@/lib/local-registrations";
 import { readStoredRosters, upsertStoredRoster, LOCAL_ROSTERS_KEY } from "@/lib/local-team-rosters";
@@ -16,7 +16,7 @@ import { mergeAdminRegistrations } from "@/lib/merge-registrations";
 import { registrationRows as seedRows } from "@/lib/mock-data";
 import { slugify } from "@/lib/slugify";
 
-// ----- shared data helpers -------------------------------------------------
+// ─── data helpers ────────────────────────────────────────────────────────────
 
 function loadRostersForSlug(clubSlug: string): {
   rosters: TeamRoster[];
@@ -71,20 +71,23 @@ function loadRostersForSlug(clubSlug: string): {
   };
 }
 
-// ----- contact draft row type -----------------------------------------------
+function profileHasData(p: Omit<ClubProfile, "clubSlug" | "updatedAt">): boolean {
+  return !!(p.pueblo || p.clubPhone || p.contactName || p.contactEmail);
+}
 
 type ContactDraft = { coachName: string; coachPhone: string };
 
-// ----- main inner component -------------------------------------------------
+// ─── main component ──────────────────────────────────────────────────────────
 
 function ClubDetailInner() {
   const params = useParams();
-  const rawSlug = params.clubSlug;
+  const router = useRouter();
+
   const clubSlug =
-    typeof rawSlug === "string"
-      ? decodeURIComponent(rawSlug)
-      : Array.isArray(rawSlug)
-        ? decodeURIComponent(rawSlug[0] ?? "")
+    typeof params.clubSlug === "string"
+      ? decodeURIComponent(params.clubSlug)
+      : Array.isArray(params.clubSlug)
+        ? decodeURIComponent(params.clubSlug[0] ?? "")
         : "";
 
   const [revision, setRevision] = useState(0);
@@ -116,7 +119,7 @@ function ClubDetailInner() {
     [clubSlug, revision],
   );
 
-  // ---------- club profile form state ---------------------------------------
+  // ── profile form ──────────────────────────────────────────────────────────
 
   const [profileDraft, setProfileDraft] = useState<Omit<ClubProfile, "clubSlug" | "updatedAt">>({
     displayName: "",
@@ -125,17 +128,21 @@ function ClubDetailInner() {
     contactName: "",
     contactEmail: "",
   });
+  const [profileExpanded, setProfileExpanded] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
 
   useEffect(() => {
     const stored = getClubProfile(clubSlug);
-    setProfileDraft({
+    const next = {
       displayName: stored?.displayName || defaultName,
       pueblo: stored?.pueblo || "",
       clubPhone: stored?.clubPhone || "",
       contactName: stored?.contactName || "",
       contactEmail: stored?.contactEmail || "",
-    });
+    };
+    setProfileDraft(next);
+    // Auto-expand if there's already saved data
+    if (stored && profileHasData(next)) setProfileExpanded(true);
   }, [clubSlug, defaultName]);
 
   const handleSaveProfile = useCallback(() => {
@@ -152,7 +159,7 @@ function ClubDetailInner() {
     window.setTimeout(() => setProfileSaved(false), 1800);
   }, [clubSlug, profileDraft, defaultName]);
 
-  // ---------- team contacts table draft state --------------------------------
+  // ── team contact drafts ────────────────────────────────────────────────────
 
   const [contactDrafts, setContactDrafts] = useState<Record<string, ContactDraft>>({});
   const [contactSaved, setContactSaved] = useState(false);
@@ -160,10 +167,7 @@ function ClubDetailInner() {
   useEffect(() => {
     const map: Record<string, ContactDraft> = {};
     for (const r of rosters) {
-      map[r.registrationId] = {
-        coachName: r.coachName,
-        coachPhone: r.coachPhone,
-      };
+      map[r.registrationId] = { coachName: r.coachName, coachPhone: r.coachPhone };
     }
     setContactDrafts(map);
   }, [rosters]);
@@ -195,18 +199,13 @@ function ClubDetailInner() {
     window.setTimeout(() => setContactSaved(false), 1800);
   }, [rosters, contactDrafts]);
 
-  // ---------- empty state ---------------------------------------------------
+  // ── not found ─────────────────────────────────────────────────────────────
 
   if (rosters.length === 0) {
     return (
       <main className="flex flex-1 flex-col gap-4">
-        <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-          Club no encontrado
-        </h2>
-        <Link
-          href="/admin/equipos"
-          className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
-        >
+        <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Club no encontrado</h2>
+        <Link href="/admin/equipos" className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400">
           ← Volver a equipos
         </Link>
       </main>
@@ -214,105 +213,125 @@ function ClubDetailInner() {
   }
 
   const displayTitle = profileDraft.displayName || defaultName;
+  const hasProfileData = profileHasData(profileDraft);
 
   return (
-    <main className="flex flex-1 flex-col gap-8">
+    <main className="flex flex-1 flex-col gap-6">
       {/* breadcrumb */}
       <nav className="flex flex-wrap items-center gap-2 text-sm">
         <Link href="/admin/equipos" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
           ← Equipos
         </Link>
         <span className="text-zinc-400">/</span>
-        <span className="text-zinc-500">{displayTitle}</span>
+        <span className="text-zinc-600 dark:text-zinc-300">{displayTitle}</span>
       </nav>
 
-      {/* ── Club profile card ─────────────────────────────────────────── */}
+      {/* ── Club profile ─────────────────────────────────────────────────── */}
       <section className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-            Datos del club
-          </h1>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            Información de contacto del club. El slug de URL no cambia al editar el nombre.
-          </p>
-        </div>
-
-        <div className="grid gap-4 p-6 sm:grid-cols-2">
-          <label className="block text-sm">
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">Nombre del club</span>
-            <input
-              value={profileDraft.displayName}
-              onChange={(e) => setProfileDraft((d) => ({ ...d, displayName: e.target.value }))}
-              placeholder={defaultName}
-              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-            />
-          </label>
-
-          <label className="block text-sm">
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">Pueblo / ciudad</span>
-            <input
-              value={profileDraft.pueblo}
-              onChange={(e) => setProfileDraft((d) => ({ ...d, pueblo: e.target.value }))}
-              placeholder="Ej. Bayamón"
-              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-            />
-          </label>
-
-          <label className="block text-sm">
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">Teléfono del club</span>
-            <input
-              value={profileDraft.clubPhone}
-              onChange={(e) => setProfileDraft((d) => ({ ...d, clubPhone: e.target.value }))}
-              placeholder="787-000-0000"
-              inputMode="tel"
-              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-            />
-          </label>
-
-          <label className="block text-sm">
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">Dueño / persona encargada</span>
-            <input
-              value={profileDraft.contactName}
-              onChange={(e) => setProfileDraft((d) => ({ ...d, contactName: e.target.value }))}
-              placeholder="Nombre completo"
-              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-            />
-          </label>
-
-          <label className="block text-sm sm:col-span-2">
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">Email</span>
-            <input
-              value={profileDraft.contactEmail}
-              onChange={(e) => setProfileDraft((d) => ({ ...d, contactEmail: e.target.value }))}
-              placeholder="contacto@club.com"
-              type="email"
-              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-            />
-          </label>
-        </div>
-
-        <div className="flex items-center gap-3 border-t border-zinc-100 px-6 py-4 dark:border-zinc-800">
+        {/* header row — always visible */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+          <div>
+            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">{displayTitle}</h1>
+            {/* show summary chips only when there is saved data and form is collapsed */}
+            {!profileExpanded && hasProfileData ? (
+              <div className="mt-1.5 flex flex-wrap gap-3 text-xs text-zinc-500">
+                {profileDraft.pueblo ? <span>{profileDraft.pueblo}</span> : null}
+                {profileDraft.clubPhone ? <span>📞 {profileDraft.clubPhone}</span> : null}
+                {profileDraft.contactName ? <span>👤 {profileDraft.contactName}</span> : null}
+                {profileDraft.contactEmail ? <span>✉️ {profileDraft.contactEmail}</span> : null}
+              </div>
+            ) : null}
+          </div>
           <button
             type="button"
-            onClick={handleSaveProfile}
-            className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+            onClick={() => setProfileExpanded((v) => !v)}
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
-            Guardar datos del club
+            {profileExpanded ? "Cerrar" : "Editar datos del club"}
           </button>
-          {profileSaved ? (
-            <span className="text-sm text-emerald-600 dark:text-emerald-400">Guardado.</span>
-          ) : null}
         </div>
+
+        {/* expandable form */}
+        {profileExpanded ? (
+          <>
+            <div className="grid gap-4 border-t border-zinc-100 p-6 dark:border-zinc-800 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">Nombre del club</span>
+                <input
+                  value={profileDraft.displayName}
+                  onChange={(e) => setProfileDraft((d) => ({ ...d, displayName: e.target.value }))}
+                  placeholder={defaultName}
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">Pueblo / ciudad</span>
+                <input
+                  value={profileDraft.pueblo}
+                  onChange={(e) => setProfileDraft((d) => ({ ...d, pueblo: e.target.value }))}
+                  placeholder="Ej. Bayamón"
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">Teléfono del club</span>
+                <input
+                  value={profileDraft.clubPhone}
+                  onChange={(e) => setProfileDraft((d) => ({ ...d, clubPhone: e.target.value }))}
+                  placeholder="787-000-0000"
+                  inputMode="tel"
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">Dueño / persona encargada</span>
+                <input
+                  value={profileDraft.contactName}
+                  onChange={(e) => setProfileDraft((d) => ({ ...d, contactName: e.target.value }))}
+                  placeholder="Nombre completo"
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+
+              <label className="block text-sm sm:col-span-2">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">Email</span>
+                <input
+                  value={profileDraft.contactEmail}
+                  onChange={(e) => setProfileDraft((d) => ({ ...d, contactEmail: e.target.value }))}
+                  placeholder="contacto@club.com"
+                  type="email"
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+            </div>
+
+            <div className="flex items-center gap-3 border-t border-zinc-100 px-6 py-4 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={handleSaveProfile}
+                className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+              >
+                Guardar datos del club
+              </button>
+              {profileSaved ? (
+                <span className="text-sm text-emerald-600 dark:text-emerald-400">Guardado.</span>
+              ) : null}
+            </div>
+          </>
+        ) : null}
       </section>
 
-      {/* ── Teams table ──────────────────────────────────────────────── */}
+      {/* ── Teams table ──────────────────────────────────────────────────── */}
       <section>
-        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
             Equipos ({rosters.length})
           </h2>
-          <p className="text-xs text-zinc-500">
-            Editá coach y teléfono aquí. Para ver o editar el roster de jugadores, abrí la página del equipo.
+          <p className="text-xs text-zinc-400">
+            Haz clic en un equipo para ver o editar su roster.
           </p>
         </div>
 
@@ -329,7 +348,6 @@ function ClubDetailInner() {
                 <th className="px-5 py-3 text-left font-medium text-zinc-700 dark:text-zinc-300">
                   Teléfono
                 </th>
-                <th className="px-5 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
@@ -338,45 +356,42 @@ function ClubDetailInner() {
                   coachName: r.coachName,
                   coachPhone: r.coachPhone,
                 };
+                const rosterHref = `/admin/equipos/${encodeURIComponent(clubSlug)}/roster/${encodeURIComponent(r.registrationId)}`;
                 return (
-                  <tr key={r.id} className="hover:bg-zinc-50/60 dark:hover:bg-zinc-900/30">
+                  <tr
+                    key={r.id}
+                    onClick={() => router.push(rosterHref)}
+                    className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                  >
                     <td className="px-5 py-3">
-                      <p className="font-medium text-zinc-900 dark:text-zinc-100">
-                        {r.teamName}
-                      </p>
+                      <p className="font-medium text-zinc-900 dark:text-zinc-100">{r.teamName}</p>
                       <p className="text-xs text-zinc-500">
                         {r.divisionLabel}
                         {r.tournamentName ? ` · ${r.tournamentName}` : ""}
                       </p>
                     </td>
-                    <td className="px-5 py-3">
+                    <td
+                      className="px-5 py-3"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <input
                         value={draft.coachName}
-                        onChange={(e) =>
-                          setContact(r.registrationId, "coachName", e.target.value)
-                        }
+                        onChange={(e) => setContact(r.registrationId, "coachName", e.target.value)}
                         placeholder="Nombre del coach"
                         className="w-full min-w-[9rem] rounded border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                       />
                     </td>
-                    <td className="px-5 py-3">
+                    <td
+                      className="px-5 py-3"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <input
                         value={draft.coachPhone}
-                        onChange={(e) =>
-                          setContact(r.registrationId, "coachPhone", e.target.value)
-                        }
+                        onChange={(e) => setContact(r.registrationId, "coachPhone", e.target.value)}
                         placeholder="787-000-0000"
                         inputMode="tel"
                         className="w-36 rounded border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                       />
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-3 text-right">
-                      <Link
-                        href={`/admin/equipos/${encodeURIComponent(clubSlug)}/roster/${encodeURIComponent(r.registrationId)}`}
-                        className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                      >
-                        Ver roster →
-                      </Link>
                     </td>
                   </tr>
                 );

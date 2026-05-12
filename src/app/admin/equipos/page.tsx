@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { readStoredRegistrations } from "@/lib/local-registrations";
 import { readStoredRosters, LOCAL_ROSTERS_KEY } from "@/lib/local-team-rosters";
@@ -60,6 +61,7 @@ function buildClubSummaries(): ClubSummary[] {
 }
 
 export default function AdminEquiposPage() {
+  const router = useRouter();
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
@@ -122,25 +124,20 @@ export default function AdminEquiposPage() {
                 <th className="px-5 py-3 text-left font-medium text-zinc-700 dark:text-zinc-300">
                   Equipos / inscripciones
                 </th>
-                <th className="px-5 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
               {clubs.map((c) => (
-                <tr key={c.clubSlug} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40">
+                <tr
+                  key={c.clubSlug}
+                  onClick={() => router.push(`/admin/equipos/${encodeURIComponent(c.clubSlug)}`)}
+                  className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                >
                   <td className="px-5 py-4 font-medium text-zinc-900 dark:text-zinc-100">
                     {c.clubName}
                   </td>
                   <td className="px-5 py-4 text-zinc-600 dark:text-zinc-400">
                     {c.teamCount} {c.teamCount === 1 ? "equipo" : "equipos"}
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <Link
-                      href={`/admin/equipos/${encodeURIComponent(c.clubSlug)}`}
-                      className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
-                    >
-                      Ver club →
-                    </Link>
                   </td>
                 </tr>
               ))}
