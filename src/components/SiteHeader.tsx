@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -33,25 +34,6 @@ function ProfileAdminIcon({ className }: { className?: string }) {
   );
 }
 
-function VolleyballIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 32 32"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      aria-hidden="true"
-    >
-      <circle cx="16" cy="16" r="13" />
-      <path d="M16 3 C16 3 10 9 10 16 C10 23 16 29 16 29" />
-      <path d="M16 3 C16 3 22 9 22 16 C22 23 16 29 16 29" />
-      <path d="M3 16 C3 16 9 10 16 10 C23 10 29 16 29 16" />
-      <path d="M3 16 C3 16 9 22 16 22 C23 22 29 16 29 16" />
-    </svg>
-  );
-}
-
 export function SiteHeader() {
   const pathname = usePathname();
 
@@ -63,7 +45,14 @@ export function SiteHeader() {
           href="/"
           className="group flex items-center gap-2.5 text-xl font-extrabold tracking-tight text-zinc-800 transition hover:text-emerald-700 dark:text-zinc-100 dark:hover:text-emerald-400"
         >
-          <VolleyballIcon className="h-8 w-8 text-emerald-600 transition duration-300 group-hover:rotate-12 dark:text-emerald-400" />
+          <Image
+            src="/volleyschedule-logo.png"
+            alt=""
+            width={40}
+            height={40}
+            className="h-10 w-10 shrink-0 object-contain transition duration-300 group-hover:scale-105"
+            priority
+          />
           <span>VolleySchedule</span>
         </Link>
 
