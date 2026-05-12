@@ -4,7 +4,13 @@ import {
   filterClubProfilesForReuse,
   applyRegistrationToFormDraft,
   applyClubProfileToFormDraft,
+  extractAgeLabel,
+  buildMergedTeamList,
+  distinctPueblosFromTeams,
+  filterMergedTeamsForDisplay,
+  mergedTeamRecencyMs,
 } from "@/lib/registration-reuse";
+import type { MergedTeam } from "@/lib/registration-reuse";
 import type { RegistrationRowMock } from "@/lib/mock-data";
 import type { ClubProfile } from "@/lib/club-profile-types";
 
@@ -66,6 +72,18 @@ const PROFILE: ClubProfile = {
 
 describe("filterRegistrationsForReuse", () => {
   const rows = [BASE_ROW, OTHER_ROW];
+
+  it("excludes club-registry synthetic rows from reuse sources", () => {
+    const registryRow: RegistrationRowMock = {
+      ...BASE_ROW,
+      id: "r-registry",
+      tournamentSlug: "__club_registry__",
+      tournamentName: "Registro de club (sistema)",
+    };
+    const result = filterRegistrationsForReuse([...rows, registryRow], "liga-desconocida", "");
+    expect(result.map((r) => r.id)).not.toContain("r-registry");
+    expect(result.length).toBe(2);
+  });
 
   it("excludes registrations from the current tournament", () => {
     const result = filterRegistrationsForReuse(rows, "copa-30", "");
@@ -166,5 +184,141 @@ describe("applyClubProfileToFormDraft", () => {
     expect(draft.repName).toBe("Directora Metro");
     expect(draft.repEmail).toBe("dir@metro.com");
     expect(draft.repPhone).toBe("787-555-1000");
+  });
+});
+
+describe("extractAgeLabel", () => {
+  it("extracts 14U from division label", () => {
+    expect(extractAgeLabel("14U Open Femenino")).toBe("14U");
+  });
+  it("returns empty when no token", () => {
+    expect(extractAgeLabel("Open")).toBe("");
+  });
+});
+
+describe("buildMergedTeamList", () => {
+  it("ignores club-registry synthetic registrations as reuse sources", () => {
+    const registryRow: RegistrationRowMock = {
+      ...BASE_ROW,
+      id: "r-registry",
+      tournamentSlug: "__club_registry__",
+      tournamentName: "Registro de club (sistema)",
+    };
+    const merged = buildMergedTeamList([registryRow, OTHER_ROW], [], "copa-30");
+    expect(merged.some((x) => x.sourceRegistration?.id === "r-registry")).toBe(false);
+    expect(merged.some((x) => x.clubName === "Norte")).toBe(true);
+  });
+
+  it("merges profile pueblo with each past registration row for same club", () => {
+    const profiles = [PROFILE];
+    const rows = [BASE_ROW];
+    const merged = buildMergedTeamList(rows, profiles, "other");
+    expect(merged.filter((x) => x.clubName === "Metro VB")).toHaveLength(1);
+    const m = merged.find((x) => x.clubName === "Metro VB");
+    expect(m).toBeDefined();
+    expect(m!.pueblo).toBe("San Juan");
+    expect(m!.coachName).toBe("Coach Luis");
+    expect(m!.ageLabel).toBe("14U");
+    expect(m!.sourceProfile).toBeDefined();
+    expect(m!.sourceRegistration).toBeDefined();
+  });
+
+  it("emits two rows for same club when two past registrations exist", () => {
+    const r14: RegistrationRowMock = {
+      ...BASE_ROW,
+      id: "metro-a",
+      tournamentSlug: "liga-a",
+      divisionLabel: "14U Open Femenino",
+      registeredAt: "2026-05-10T10:00:00Z",
+    };
+    const r16: RegistrationRowMock = {
+      ...BASE_ROW,
+      id: "metro-b",
+      tournamentSlug: "liga-b",
+      divisionLabel: "16U Open Femenino",
+      registeredAt: "2026-05-08T10:00:00Z",
+    };
+    const merged = buildMergedTeamList([r16, r14], [PROFILE], "copa-30");
+    const metro = merged.filter((x) => x.clubName === "Metro VB");
+    expect(metro).toHaveLength(2);
+    const ages = metro.map((m) => m.ageLabel).sort();
+    expect(ages).toEqual(["14U", "16U"]);
+    expect(new Set(metro.map((m) => m.sourceRegistration?.id))).toEqual(new Set(["metro-a", "metro-b"]));
+  });
+
+  it("adds orphan registration without profile", () => {
+    const merged = buildMergedTeamList([OTHER_ROW], [], "other");
+    expect(merged.some((x) => x.clubName === "Norte")).toBe(true);
+    const n = merged.find((x) => x.clubName === "Norte");
+    expect(n!.pueblo).toBe("");
+    expect(n!.sourceRegistration?.id).toBe("r2");
+  });
+
+  it("excludes current tournament registrations", () => {
+    const merged = buildMergedTeamList([BASE_ROW], [PROFILE], "copa-30");
+    const m = merged.find((x) => x.clubName === "Metro VB");
+    expect(m).toBeDefined();
+    expect(m!.sourceRegistration).toBeUndefined();
+    expect(m!.coachName).toBe("");
+    expect(m!.sourceProfile).toBeDefined();
+  });
+});
+
+describe("distinctPueblosFromTeams", () => {
+  it("returns sorted unique pueblos", () => {
+    const teams: MergedTeam[] = [
+      { clubName: "A", pueblo: "Bayamón", coachName: "", ageLabel: "" },
+      { clubName: "B", pueblo: "Santa Isabel", coachName: "", ageLabel: "" },
+      { clubName: "C", pueblo: "Bayamón", coachName: "", ageLabel: "" },
+    ];
+    expect(distinctPueblosFromTeams(teams)).toEqual(["Bayamón", "Santa Isabel"]);
+  });
+});
+
+describe("filterMergedTeamsForDisplay", () => {
+  const teams: MergedTeam[] = [
+    { clubName: "A", pueblo: "Bayamón", coachName: "Luis", ageLabel: "14U" },
+    { clubName: "B", pueblo: "Bayamón", coachName: "Ana", ageLabel: "16U" },
+    { clubName: "C", pueblo: "Santa Isabel", coachName: "Luis", ageLabel: "12U" },
+  ];
+
+  it("filters by pueblo exact", () => {
+    const out = filterMergedTeamsForDisplay(teams, "Bayamón", "", "", "", true);
+    expect(out.map((t) => t.clubName)).toEqual(["A", "B"]);
+  });
+
+  it("limits to 5 when no pueblo", () => {
+    const many: MergedTeam[] = Array.from({ length: 10 }, (_, i) => ({
+      clubName: `Club${i}`,
+      pueblo: "",
+      coachName: "",
+      ageLabel: "",
+      sourceRegistration: {
+        ...BASE_ROW,
+        id: `r${i}`,
+        clubName: `Club${i}`,
+        registeredAt: `2026-05-${String(10 + i).padStart(2, "0")}T10:00:00Z`,
+      },
+    }));
+    const out = filterMergedTeamsForDisplay(many, "", "", "", "", false);
+    expect(out.length).toBe(5);
+  });
+
+  it("filters by coach substring", () => {
+    const out = filterMergedTeamsForDisplay(teams, "Bayamón", "", "", "luis", true);
+    expect(out.map((t) => t.clubName)).toEqual(["A"]);
+  });
+});
+
+describe("mergedTeamRecencyMs", () => {
+  it("uses registration date when present", () => {
+    const t: MergedTeam = {
+      clubName: "X",
+      pueblo: "",
+      coachName: "",
+      ageLabel: "",
+      sourceRegistration: BASE_ROW,
+    };
+    expect(mergedTeamRecencyMs(t)).toBeGreaterThan(0);
   });
 });

@@ -172,21 +172,23 @@ export default function PublicHomePage() {
 
   const today = localDateString(new Date());
 
+  const publicAll = useMemo(() => all.filter((t) => !t.hiddenFromPublic), [all]);
+
   const activeTournaments = useMemo(
-    () => getActiveLiveTournaments(all, today),
-    [all, today],
+    () => getActiveLiveTournaments(publicAll, today),
+    [publicAll, today],
   );
 
   const cards = useMemo(
     () =>
-      [...all]
+      [...publicAll]
         .filter((t) => t.status !== "draft")
         .sort((a, b) => {
           if (a.status === "open" && b.status !== "open") return -1;
           if (b.status === "open" && a.status !== "open") return 1;
           return b.tournamentStartsOn.localeCompare(a.tournamentStartsOn);
         }),
-    [all],
+    [publicAll],
   );
 
   const featured = activeTournaments[0] ?? null;

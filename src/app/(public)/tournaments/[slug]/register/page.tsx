@@ -8,7 +8,7 @@ type Props = { params: Promise<{ slug: string }> };
 export default async function RegisterPage(props: Props) {
   const { slug } = await props.params;
   const tournament = getTournamentBySlug(slug);
-  if (!tournament || tournament.status !== "open") notFound();
+  if (!tournament || tournament.hiddenFromPublic || tournament.status !== "open") notFound();
 
   const registerPayload = {
     slug: tournament.slug,

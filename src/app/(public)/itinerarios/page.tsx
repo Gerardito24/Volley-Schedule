@@ -38,10 +38,12 @@ export default function ItinerariosPage() {
 
   const published = useMemo(
     () =>
-      all.filter((t) => {
-        const s = t.schedule;
-        return s?.published && s.categorySchedules.some((cs) => cs.phases.some((p) => p.matches.length > 0));
-      }),
+      all
+        .filter((t) => !t.hiddenFromPublic)
+        .filter((t) => {
+          const s = t.schedule;
+          return s?.published && s.categorySchedules.some((cs) => cs.phases.some((p) => p.matches.length > 0));
+        }),
     [all],
   );
 

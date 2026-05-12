@@ -84,7 +84,12 @@ export type TournamentMock = {
   categories: CategoryMock[];
   /** Itinerario / brackets; undefined/null = no generado aún. */
   schedule?: TournamentScheduleMock | null;
+  /** When true, omit from public home/tournaments/itinerarios; direct URL returns 404. */
+  hiddenFromPublic?: boolean;
 };
+
+/** Synthetic tournament slug for club-only registration (local storage pipeline). */
+export const CLUB_REGISTRY_SLUG = "__club_registry__" as const;
 
 export type PlayerEntry = {
   id: string;
@@ -223,6 +228,35 @@ export const tournaments: TournamentMock[] = [
         gender: "mixto",
         feeCents: 29000,
         maxTeams: 14,
+        subdivisions: [],
+      },
+    ],
+  },
+  {
+    slug: CLUB_REGISTRY_SLUG,
+    name: "Registro de club (sistema)",
+    description:
+      "Uso interno: las inscripciones bajo este torneo enlazan el club con el panel de administración igual que un torneo real.",
+    locationLabel: "—",
+    venues: [{ label: "—", courtCount: null }],
+    registrationDeadlineOn: "2099-12-31",
+    tournamentStartsOn: "2099-01-01",
+    tournamentEndsOn: "2099-01-02",
+    registrationFeeCents: 0,
+    publicEntryFeeCents: null,
+    promoImageDataUrl: null,
+    status: "open",
+    hiddenFromPublic: true,
+    divisions: [{ id: "div-club-registry", label: "Club" }],
+    categories: [
+      {
+        id: "cat-club-registry",
+        label: "Registro general",
+        ageLabel: "Club",
+        divisionId: "div-club-registry",
+        gender: "mixto",
+        feeCents: 0,
+        maxTeams: null,
         subdivisions: [],
       },
     ],

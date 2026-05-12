@@ -22,7 +22,7 @@ function formatMoney(cents: number) {
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const { slug } = await props.params;
   const t = getTournamentBySlug(slug);
-  if (!t) return { title: "Torneo no encontrado" };
+  if (!t || t.hiddenFromPublic) return { title: "Torneo no encontrado" };
   return {
     title: `${t.name} · VolleySchedule`,
     description: t.description,
@@ -32,7 +32,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 export default async function TournamentDetailPage(props: Props) {
   const { slug } = await props.params;
   const tournament = getTournamentBySlug(slug);
-  if (!tournament) notFound();
+  if (!tournament || tournament.hiddenFromPublic) notFound();
 
   const open = tournament.status === "open";
 
