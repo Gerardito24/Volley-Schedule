@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { mergeAdminTournaments } from "@/lib/merge-tournaments";
 import { readStoredTournaments } from "@/lib/local-tournaments";
 import type { TournamentMock } from "@/lib/mock-data";
-import { tournaments as seedTournaments } from "@/lib/mock-data";
+import { tournaments as seedTournaments, formatTournamentLocationsLine } from "@/lib/mock-data";
 import { minEffectiveFeeCents } from "@/lib/tournament-pricing";
 
 function formatMoney(cents: number) {
@@ -78,7 +78,7 @@ export default function AdminTournamentsPage() {
                   </span>
                 </div>
                 <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                  {t.tournamentStartsOn} — {t.tournamentEndsOn} · {t.locationLabel}
+                  {t.tournamentStartsOn} — {t.tournamentEndsOn} · {formatTournamentLocationsLine(t)}
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
                   Inscripciones hasta {t.registrationDeadlineOn}

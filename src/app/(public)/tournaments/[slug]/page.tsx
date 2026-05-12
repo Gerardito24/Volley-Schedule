@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { PublicTournamentSchedule } from "@/components/PublicTournamentSchedule";
-import { getTournamentBySlug } from "@/lib/mock-data";
+import { getTournamentBySlug, formatTournamentLocationsLine } from "@/lib/mock-data";
 import { effectiveCategoryFeeCents } from "@/lib/tournament-pricing";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -45,7 +45,7 @@ export default async function TournamentDetailPage(props: Props) {
         </h1>
         <p className="mt-2 text-zinc-600 dark:text-zinc-400">
           Torneo: {tournament.tournamentStartsOn} — {tournament.tournamentEndsOn} ·{" "}
-          {tournament.locationLabel}
+          {formatTournamentLocationsLine(tournament)}
         </p>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           Fecha límite de inscripción: {tournament.registrationDeadlineOn}

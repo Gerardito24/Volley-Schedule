@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { TournamentMock } from "@/lib/mock-data";
+import { formatTournamentLocationsLine } from "@/lib/mock-data";
 import { minEffectiveFeeCents } from "@/lib/tournament-pricing";
 
 function formatMoney(cents: number) {
@@ -20,7 +21,7 @@ export function TournamentCard({ tournament }: { tournament: TournamentMock }) {
       </h2>
       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
         {tournament.tournamentStartsOn} — {tournament.tournamentEndsOn} ·{" "}
-        {tournament.locationLabel}
+        {formatTournamentLocationsLine(tournament)}
       </p>
       <p className="mt-1 text-xs text-zinc-500">
         Inscripciones hasta {tournament.registrationDeadlineOn}

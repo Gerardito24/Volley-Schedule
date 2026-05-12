@@ -21,7 +21,12 @@ export type TournamentMock = {
   slug: string;
   name: string;
   description: string;
+  /** Etiqueta única para listados (se sincroniza con `locations` al guardar). */
   locationLabel: string;
+  /** Una o más sedes / lugares del torneo. */
+  locations: string[];
+  /** Cantidad de canchas disponibles para el torneo; null = no definido. */
+  courtCount: number | null;
   registrationDeadlineOn: string;
   tournamentStartsOn: string;
   tournamentEndsOn: string;
@@ -66,6 +71,8 @@ export const tournaments: TournamentMock[] = [
     description:
       "Torneo de verano — registro centralizado reemplaza el formulario Cognito legacy.",
     locationLabel: "Puerto Rico",
+    locations: ["Puerto Rico"],
+    courtCount: null,
     registrationDeadlineOn: "2026-06-08",
     tournamentStartsOn: "2026-06-15",
     tournamentEndsOn: "2026-06-17",
@@ -102,6 +109,8 @@ export const tournaments: TournamentMock[] = [
     name: "Premier 5C",
     description: "Evento Premier — cupos limitados por división.",
     locationLabel: "Bayamón",
+    locations: ["Bayamón"],
+    courtCount: null,
     registrationDeadlineOn: "2026-06-27",
     tournamentStartsOn: "2026-07-04",
     tournamentEndsOn: "2026-07-06",
@@ -186,6 +195,30 @@ export const registrationRows: RegistrationRowMock[] = [
     subdivisionId: null,
   },
 ];
+
+/** Lista de ubicaciones (compat con datos viejos sin `locations`). */
+export function tournamentLocationsList(t: TournamentMock): string[] {
+  if (Array.isArray(t.locations) && t.locations.length > 0) {
+    return t.locations.map((s) => String(s).trim()).filter(Boolean);
+  }
+  return t.locationLabel.trim() ? [t.locationLabel.trim()] : [];
+}
+
+export function formatTournamentLocationsLine(t: TournamentMock): string {
+  const list = tournamentLocationsList(t);
+  return list.length ? list.join(" · ") : "—";
+}
+
+export function normalizeTournament(t: TournamentMock): TournamentMock {
+  const locs = tournamentLocationsList(t);
+  const label = locs.length ? locs.join(" · ") : t.locationLabel.trim() || "Por definir";
+  return {
+    ...t,
+    locations: locs.length ? locs : [label],
+    locationLabel: label,
+    courtCount: t.courtCount ?? null,
+  };
+}
 
 export function getTournamentBySlug(slug: string): TournamentMock | undefined {
   return tournaments.find((t) => t.slug === slug);

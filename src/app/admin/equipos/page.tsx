@@ -16,6 +16,8 @@ type ClubSummary = {
   clubSlug: string;
   teamCount: number;
   registrationIds: string[];
+  pueblo: string;
+  owner: string;
 };
 
 function buildClubSummaries(): ClubSummary[] {
@@ -35,6 +37,8 @@ function buildClubSummaries(): ClubSummary[] {
         clubSlug: slug,
         teamCount: 0,
         registrationIds: [],
+        pueblo: profile?.pueblo ?? "",
+        owner: profile?.contactName ?? "",
       });
     }
     const entry = map.get(key)!;
@@ -55,9 +59,17 @@ function buildClubSummaries(): ClubSummary[] {
     }
   }
 
-  return [...map.values()].sort((a, b) =>
-    a.clubName.localeCompare(b.clubName, "es"),
-  );
+  return [...map.values()]
+    .map((c) => {
+      const prof = profiles.find((p) => p.clubSlug === c.clubSlug);
+      return {
+        ...c,
+        clubName: prof?.displayName?.trim() || c.clubName,
+        pueblo: prof?.pueblo ?? "",
+        owner: prof?.contactName ?? "",
+      };
+    })
+    .sort((a, b) => a.clubName.localeCompare(b.clubName, "es"));
 }
 
 export default function AdminEquiposPage() {
@@ -122,6 +134,12 @@ export default function AdminEquiposPage() {
                   Club
                 </th>
                 <th className="px-5 py-3 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                  Pueblo
+                </th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                  Dueño
+                </th>
+                <th className="px-5 py-3 text-left font-medium text-zinc-700 dark:text-zinc-300">
                   Equipos / inscripciones
                 </th>
               </tr>
@@ -135,6 +153,12 @@ export default function AdminEquiposPage() {
                 >
                   <td className="px-5 py-4 font-medium text-zinc-900 dark:text-zinc-100">
                     {c.clubName}
+                  </td>
+                  <td className="px-5 py-4 text-zinc-600 dark:text-zinc-400">
+                    {c.pueblo || ""}
+                  </td>
+                  <td className="px-5 py-4 text-zinc-600 dark:text-zinc-400">
+                    {c.owner || ""}
                   </td>
                   <td className="px-5 py-4 text-zinc-600 dark:text-zinc-400">
                     {c.teamCount} {c.teamCount === 1 ? "equipo" : "equipos"}

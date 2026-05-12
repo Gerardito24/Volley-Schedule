@@ -301,6 +301,8 @@ export function NewTournamentForm() {
       name: name.trim(),
       description: description.trim() || "Sin descripción.",
       locationLabel: locationLabel.trim() || "Por definir",
+      locations: [locationLabel.trim() || "Por definir"],
+      courtCount: null,
       registrationDeadlineOn,
       tournamentStartsOn,
       tournamentEndsOn,

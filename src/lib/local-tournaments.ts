@@ -3,6 +3,7 @@ import type {
   SubdivisionMock,
   TournamentMock,
 } from "@/lib/mock-data";
+import { normalizeTournament } from "@/lib/mock-data";
 import type {
   CategoryScheduleMock,
   MatchSideRef,
@@ -22,7 +23,7 @@ export function readStoredTournaments(): TournamentMock[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isTournamentMock);
+    return parsed.filter(isTournamentMock).map(normalizeTournament);
   } catch {
     return [];
   }
@@ -216,6 +217,11 @@ function isTournamentMock(value: unknown): value is TournamentMock {
     o.schedule === undefined ||
     o.schedule === null ||
     isTournamentScheduleMock(o.schedule);
+  const locsOk =
+    o.locations === undefined ||
+    (Array.isArray(o.locations) && o.locations.every((x: unknown) => typeof x === "string"));
+  const courtOk =
+    o.courtCount === undefined || o.courtCount === null || typeof o.courtCount === "number";
   return (
     typeof o.slug === "string" &&
     typeof o.name === "string" &&
@@ -230,6 +236,8 @@ function isTournamentMock(value: unknown): value is TournamentMock {
     (o.status === "open" || o.status === "closed" || o.status === "draft") &&
     Array.isArray(o.categories) &&
     o.categories.every(isCategoryMock) &&
-    scheduleOk
+    scheduleOk &&
+    locsOk &&
+    courtOk
   );
 }

@@ -16,7 +16,12 @@ import {
 import { mergeAdminTournaments } from "@/lib/merge-tournaments";
 import { mergeAdminRegistrations } from "@/lib/merge-registrations";
 import type { CategoryMock, TournamentMock } from "@/lib/mock-data";
-import { registrationRows as seedRegistrationRows, tournaments as seedTournaments } from "@/lib/mock-data";
+import {
+  registrationRows as seedRegistrationRows,
+  tournaments as seedTournaments,
+  formatTournamentLocationsLine,
+  tournamentLocationsList,
+} from "@/lib/mock-data";
 import { effectiveCategoryFeeCents } from "@/lib/tournament-pricing";
 
 const statusLabel: Record<TournamentMock["status"], string> = {
@@ -48,7 +53,8 @@ function centsToInput(c: number | null): string {
 type GeneralDraft = {
   name: string;
   description: string;
-  locationLabel: string;
+  locations: string[];
+  courtCountInput: string;
   registrationDeadlineOn: string;
   tournamentStartsOn: string;
   tournamentEndsOn: string;
@@ -58,10 +64,12 @@ type GeneralDraft = {
 };
 
 function tournamentToGeneralDraft(t: TournamentMock): GeneralDraft {
+  const locs = tournamentLocationsList(t);
   return {
     name: t.name,
     description: t.description,
-    locationLabel: t.locationLabel,
+    locations: locs.length ? [...locs] : [""],
+    courtCountInput: t.courtCount != null ? String(t.courtCount) : "",
     registrationDeadlineOn: t.registrationDeadlineOn,
     tournamentStartsOn: t.tournamentStartsOn,
     tournamentEndsOn: t.tournamentEndsOn,
@@ -162,11 +170,24 @@ function AdminTournamentDetailInner() {
 
   const handleSaveGeneral = useCallback(() => {
     if (!tournament || !generalDraft) return;
+    const trimmed = generalDraft.locations.map((s) => s.trim()).filter(Boolean);
+    const locs =
+      trimmed.length > 0
+        ? trimmed
+        : [tournament.locationLabel.trim() || "Por definir"];
+    const courtRaw = generalDraft.courtCountInput.trim();
+    let courtCount: number | null = null;
+    if (courtRaw) {
+      const n = Number.parseInt(courtRaw, 10);
+      if (!Number.isNaN(n) && n >= 0) courtCount = n;
+    }
     const next: TournamentMock = {
       ...tournament,
       name: generalDraft.name.trim() || tournament.name,
       description: generalDraft.description,
-      locationLabel: generalDraft.locationLabel.trim() || tournament.locationLabel,
+      locations: locs,
+      locationLabel: locs.join(" · "),
+      courtCount,
       registrationDeadlineOn: generalDraft.registrationDeadlineOn,
       tournamentStartsOn: generalDraft.tournamentStartsOn,
       tournamentEndsOn: generalDraft.tournamentEndsOn,
@@ -517,18 +538,78 @@ function AdminTournamentDetailInner() {
                   className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
                 />
               </label>
+              <div className="relative lg:col-span-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Ubicaciones
+                  </span>
+                  <button
+                    type="button"
+                    title="Agregar ubicación"
+                    onClick={() =>
+                      setGeneralDraft((d) =>
+                        d ? { ...d, locations: [...d.locations, ""] } : d,
+                      )
+                    }
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-white text-lg font-semibold leading-none text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    +
+                  </button>
+                </div>
+                <div className="mt-2 space-y-2">
+                  {generalDraft.locations.map((loc, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={loc}
+                        onChange={(e) =>
+                          setGeneralDraft((d) => {
+                            if (!d) return d;
+                            const next = [...d.locations];
+                            next[idx] = e.target.value;
+                            return { ...d, locations: next };
+                          })
+                        }
+                        placeholder={`Ubicación ${idx + 1}`}
+                        className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                      />
+                      {generalDraft.locations.length > 1 ? (
+                        <button
+                          type="button"
+                          title="Quitar"
+                          onClick={() =>
+                            setGeneralDraft((d) => {
+                              if (!d || d.locations.length <= 1) return d;
+                              return {
+                                ...d,
+                                locations: d.locations.filter((_, i) => i !== idx),
+                              };
+                            })
+                          }
+                          className="shrink-0 rounded-lg border border-zinc-200 px-2.5 py-2 text-sm text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
               <label className="block text-sm">
                 <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Ubicación
+                  Cantidad de canchas
                 </span>
                 <input
-                  type="text"
-                  value={generalDraft.locationLabel}
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={generalDraft.courtCountInput}
                   onChange={(e) =>
                     setGeneralDraft((d) =>
-                      d ? { ...d, locationLabel: e.target.value } : d,
+                      d ? { ...d, courtCountInput: e.target.value } : d,
                     )
                   }
+                  placeholder="Ej. 4"
                   className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
                 />
               </label>
@@ -604,7 +685,7 @@ function AdminTournamentDetailInner() {
             </h2>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
               Torneo: {tournament.tournamentStartsOn} — {tournament.tournamentEndsOn}{" "}
-              · {tournament.locationLabel}
+              · {formatTournamentLocationsLine(tournament)}
             </p>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               Límite inscripciones: {tournament.registrationDeadlineOn}
@@ -618,7 +699,7 @@ function AdminTournamentDetailInner() {
           {tournament.description}
         </p>
 
-        <dl className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <dl className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900">
             <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
               Tarifa base inscripción
@@ -637,6 +718,14 @@ function AdminTournamentDetailInner() {
               {tournament.publicEntryFeeCents != null
                 ? formatMoney(tournament.publicEntryFeeCents)
                 : "—"}
+            </dd>
+          </div>
+          <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900">
+            <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+              Canchas
+            </dt>
+            <dd className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              {tournament.courtCount != null ? tournament.courtCount : "—"}
             </dd>
           </div>
         </dl>
