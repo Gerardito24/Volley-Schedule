@@ -15,12 +15,12 @@ import {
 } from "@/lib/local-registrations";
 import { mergeAdminTournaments } from "@/lib/merge-tournaments";
 import { mergeAdminRegistrations } from "@/lib/merge-registrations";
-import type { CategoryMock, TournamentMock } from "@/lib/mock-data";
+import type { CategoryMock, TournamentMock, TournamentVenue } from "@/lib/mock-data";
 import {
   registrationRows as seedRegistrationRows,
   tournaments as seedTournaments,
   formatTournamentLocationsLine,
-  tournamentLocationsList,
+  normalizeTournament,
 } from "@/lib/mock-data";
 import { effectiveCategoryFeeCents } from "@/lib/tournament-pricing";
 
@@ -50,11 +50,12 @@ function centsToInput(c: number | null): string {
   return (c / 100).toFixed(2);
 }
 
+type VenueRowDraft = { label: string; courtCountInput: string };
+
 type GeneralDraft = {
   name: string;
   description: string;
-  locations: string[];
-  courtCountInput: string;
+  venueRows: VenueRowDraft[];
   registrationDeadlineOn: string;
   tournamentStartsOn: string;
   tournamentEndsOn: string;
@@ -63,19 +64,33 @@ type GeneralDraft = {
   publicEntryFeeInput: string;
 };
 
+function parseCourtCountInput(raw: string): number | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const n = Number.parseInt(t, 10);
+  if (Number.isNaN(n) || n < 0) return null;
+  return n;
+}
+
 function tournamentToGeneralDraft(t: TournamentMock): GeneralDraft {
-  const locs = tournamentLocationsList(t);
+  const nt = normalizeTournament(t);
+  const venueRows: VenueRowDraft[] =
+    nt.venues.length > 0
+      ? nt.venues.map((v) => ({
+          label: v.label,
+          courtCountInput: v.courtCount != null ? String(v.courtCount) : "",
+        }))
+      : [{ label: "", courtCountInput: "" }];
   return {
-    name: t.name,
-    description: t.description,
-    locations: locs.length ? [...locs] : [""],
-    courtCountInput: t.courtCount != null ? String(t.courtCount) : "",
-    registrationDeadlineOn: t.registrationDeadlineOn,
-    tournamentStartsOn: t.tournamentStartsOn,
-    tournamentEndsOn: t.tournamentEndsOn,
-    status: t.status,
-    registrationFeeInput: centsToInput(t.registrationFeeCents),
-    publicEntryFeeInput: centsToInput(t.publicEntryFeeCents),
+    name: nt.name,
+    description: nt.description,
+    venueRows,
+    registrationDeadlineOn: nt.registrationDeadlineOn,
+    tournamentStartsOn: nt.tournamentStartsOn,
+    tournamentEndsOn: nt.tournamentEndsOn,
+    status: nt.status,
+    registrationFeeInput: centsToInput(nt.registrationFeeCents),
+    publicEntryFeeInput: centsToInput(nt.publicEntryFeeCents),
   };
 }
 
@@ -170,31 +185,33 @@ function AdminTournamentDetailInner() {
 
   const handleSaveGeneral = useCallback(() => {
     if (!tournament || !generalDraft) return;
-    const trimmed = generalDraft.locations.map((s) => s.trim()).filter(Boolean);
-    const locs =
-      trimmed.length > 0
-        ? trimmed
-        : [tournament.locationLabel.trim() || "Por definir"];
-    const courtRaw = generalDraft.courtCountInput.trim();
-    let courtCount: number | null = null;
-    if (courtRaw) {
-      const n = Number.parseInt(courtRaw, 10);
-      if (!Number.isNaN(n) && n >= 0) courtCount = n;
-    }
-    const next: TournamentMock = {
+    const parsedRows = generalDraft.venueRows.map((row) => ({
+      label: row.label.trim(),
+      courtCount: parseCourtCountInput(row.courtCountInput),
+    }));
+    const nonEmpty = parsedRows.filter((r) => r.label.length > 0);
+    const venues: TournamentVenue[] =
+      nonEmpty.length > 0
+        ? nonEmpty
+        : [
+            {
+              label: tournament.locationLabel.trim() || "Por definir",
+              courtCount: null,
+            },
+          ];
+    const next = normalizeTournament({
       ...tournament,
       name: generalDraft.name.trim() || tournament.name,
       description: generalDraft.description,
-      locations: locs,
-      locationLabel: locs.join(" · "),
-      courtCount,
+      venues,
+      locationLabel: venues.map((v) => v.label).join(" · "),
       registrationDeadlineOn: generalDraft.registrationDeadlineOn,
       tournamentStartsOn: generalDraft.tournamentStartsOn,
       tournamentEndsOn: generalDraft.tournamentEndsOn,
       status: generalDraft.status,
       registrationFeeCents: dollarsToCents(generalDraft.registrationFeeInput),
       publicEntryFeeCents: dollarsToCents(generalDraft.publicEntryFeeInput),
-    };
+    });
     persistTournament(next);
     setGeneralSaved(true);
     window.setTimeout(() => setGeneralSaved(false), 2000);
@@ -541,14 +558,22 @@ function AdminTournamentDetailInner() {
               <div className="relative lg:col-span-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    Ubicaciones
+                    Ubicaciones y canchas
                   </span>
                   <button
                     type="button"
-                    title="Agregar ubicación"
+                    title="Agregar sede"
                     onClick={() =>
                       setGeneralDraft((d) =>
-                        d ? { ...d, locations: [...d.locations, ""] } : d,
+                        d
+                          ? {
+                              ...d,
+                              venueRows: [
+                                ...d.venueRows,
+                                { label: "", courtCountInput: "" },
+                              ],
+                            }
+                          : d,
                       )
                     }
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-white text-lg font-semibold leading-none text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
@@ -556,33 +581,55 @@ function AdminTournamentDetailInner() {
                     +
                   </button>
                 </div>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Cada sede tiene su propia cantidad de canchas.
+                </p>
                 <div className="mt-2 space-y-2">
-                  {generalDraft.locations.map((loc, idx) => (
-                    <div key={idx} className="flex gap-2">
+                  {generalDraft.venueRows.map((row, idx) => (
+                    <div key={idx} className="flex flex-wrap items-center gap-2">
                       <input
                         type="text"
-                        value={loc}
+                        value={row.label}
                         onChange={(e) =>
                           setGeneralDraft((d) => {
                             if (!d) return d;
-                            const next = [...d.locations];
-                            next[idx] = e.target.value;
-                            return { ...d, locations: next };
+                            const next = [...d.venueRows];
+                            next[idx] = { ...next[idx], label: e.target.value };
+                            return { ...d, venueRows: next };
                           })
                         }
                         placeholder={`Ubicación ${idx + 1}`}
                         className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
                       />
-                      {generalDraft.locations.length > 1 ? (
+                      <input
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        value={row.courtCountInput}
+                        onChange={(e) =>
+                          setGeneralDraft((d) => {
+                            if (!d) return d;
+                            const next = [...d.venueRows];
+                            next[idx] = {
+                              ...next[idx],
+                              courtCountInput: e.target.value,
+                            };
+                            return { ...d, venueRows: next };
+                          })
+                        }
+                        placeholder="Canchas"
+                        className="w-24 shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                      />
+                      {generalDraft.venueRows.length > 1 ? (
                         <button
                           type="button"
                           title="Quitar"
                           onClick={() =>
                             setGeneralDraft((d) => {
-                              if (!d || d.locations.length <= 1) return d;
+                              if (!d || d.venueRows.length <= 1) return d;
                               return {
                                 ...d,
-                                locations: d.locations.filter((_, i) => i !== idx),
+                                venueRows: d.venueRows.filter((_, i) => i !== idx),
                               };
                             })
                           }
@@ -595,24 +642,6 @@ function AdminTournamentDetailInner() {
                   ))}
                 </div>
               </div>
-              <label className="block text-sm">
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Cantidad de canchas
-                </span>
-                <input
-                  type="number"
-                  min={0}
-                  inputMode="numeric"
-                  value={generalDraft.courtCountInput}
-                  onChange={(e) =>
-                    setGeneralDraft((d) =>
-                      d ? { ...d, courtCountInput: e.target.value } : d,
-                    )
-                  }
-                  placeholder="Ej. 4"
-                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-                />
-              </label>
               <label className="block text-sm lg:col-span-2">
                 <span className="font-medium text-zinc-700 dark:text-zinc-300">
                   Descripción
@@ -722,10 +751,16 @@ function AdminTournamentDetailInner() {
           </div>
           <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900">
             <dt className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-              Canchas
+              Canchas por sede
             </dt>
             <dd className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              {tournament.courtCount != null ? tournament.courtCount : "—"}
+              <ul className="list-none space-y-0.5 font-normal">
+                {normalizeTournament(tournament).venues.map((v, i) => (
+                  <li key={i}>
+                    {v.label}: {v.courtCount != null ? v.courtCount : "—"}
+                  </li>
+                ))}
+              </ul>
             </dd>
           </div>
         </dl>

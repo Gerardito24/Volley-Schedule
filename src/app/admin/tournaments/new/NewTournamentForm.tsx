@@ -296,13 +296,13 @@ export function NewTournamentForm() {
     const takenSlugs = new Set(mergedForSlug.map((t) => t.slug));
     const slug = uniqueSlug(name, takenSlugs);
 
+    const loc = locationLabel.trim() || "Por definir";
     const tournament: TournamentMock = {
       slug,
       name: name.trim(),
       description: description.trim() || "Sin descripción.",
-      locationLabel: locationLabel.trim() || "Por definir",
-      locations: [locationLabel.trim() || "Por definir"],
-      courtCount: null,
+      locationLabel: loc,
+      venues: [{ label: loc, courtCount: null }],
       registrationDeadlineOn,
       tournamentStartsOn,
       tournamentEndsOn,

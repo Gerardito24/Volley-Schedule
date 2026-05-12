@@ -17,16 +17,20 @@ export type CategoryMock = {
   subdivisions: SubdivisionMock[];
 };
 
+export type TournamentVenue = {
+  label: string;
+  /** Canchas en esa sede; null = sin definir. */
+  courtCount: number | null;
+};
+
 export type TournamentMock = {
   slug: string;
   name: string;
   description: string;
-  /** Etiqueta única para listados (se sincroniza con `locations` al guardar). */
+  /** Etiqueta única para listados (se deriva de `venues` al guardar). */
   locationLabel: string;
-  /** Una o más sedes / lugares del torneo. */
-  locations: string[];
-  /** Cantidad de canchas disponibles para el torneo; null = no definido. */
-  courtCount: number | null;
+  /** Sedes del torneo; cada una tiene su cantidad de canchas. */
+  venues: TournamentVenue[];
   registrationDeadlineOn: string;
   tournamentStartsOn: string;
   tournamentEndsOn: string;
@@ -71,8 +75,7 @@ export const tournaments: TournamentMock[] = [
     description:
       "Torneo de verano — registro centralizado reemplaza el formulario Cognito legacy.",
     locationLabel: "Puerto Rico",
-    locations: ["Puerto Rico"],
-    courtCount: null,
+    venues: [{ label: "Puerto Rico", courtCount: null }],
     registrationDeadlineOn: "2026-06-08",
     tournamentStartsOn: "2026-06-15",
     tournamentEndsOn: "2026-06-17",
@@ -109,8 +112,7 @@ export const tournaments: TournamentMock[] = [
     name: "Premier 5C",
     description: "Evento Premier — cupos limitados por división.",
     locationLabel: "Bayamón",
-    locations: ["Bayamón"],
-    courtCount: null,
+    venues: [{ label: "Bayamón", courtCount: null }],
     registrationDeadlineOn: "2026-06-27",
     tournamentStartsOn: "2026-07-04",
     tournamentEndsOn: "2026-07-06",
@@ -196,12 +198,21 @@ export const registrationRows: RegistrationRowMock[] = [
   },
 ];
 
-/** Lista de ubicaciones (compat con datos viejos sin `locations`). */
+/** Lista de nombres de sede (solo etiquetas). */
 export function tournamentLocationsList(t: TournamentMock): string[] {
-  if (Array.isArray(t.locations) && t.locations.length > 0) {
-    return t.locations.map((s) => String(s).trim()).filter(Boolean);
+  const raw = t as unknown as {
+    venues?: TournamentVenue[];
+    locations?: string[];
+    locationLabel?: string;
+  };
+  if (Array.isArray(raw.venues) && raw.venues.length > 0) {
+    return raw.venues.map((v) => String(v.label ?? "").trim()).filter(Boolean);
   }
-  return t.locationLabel.trim() ? [t.locationLabel.trim()] : [];
+  if (Array.isArray(raw.locations) && raw.locations.length > 0) {
+    return raw.locations.map((s) => String(s).trim()).filter(Boolean);
+  }
+  const lb = String(raw.locationLabel ?? "").trim();
+  return lb ? [lb] : [];
 }
 
 export function formatTournamentLocationsLine(t: TournamentMock): string {
@@ -209,15 +220,46 @@ export function formatTournamentLocationsLine(t: TournamentMock): string {
   return list.length ? list.join(" · ") : "—";
 }
 
+/** Construye `venues` coherentes a partir de torneo seed, local viejo o actual. */
 export function normalizeTournament(t: TournamentMock): TournamentMock {
-  const locs = tournamentLocationsList(t);
-  const label = locs.length ? locs.join(" · ") : t.locationLabel.trim() || "Por definir";
-  return {
-    ...t,
-    locations: locs.length ? locs : [label],
-    locationLabel: label,
-    courtCount: t.courtCount ?? null,
+  const legacy = t as unknown as {
+    locations?: string[];
+    courtCount?: number | null;
+    venues?: TournamentVenue[];
   };
+
+  let venues: TournamentVenue[] = [];
+  if (Array.isArray(legacy.venues) && legacy.venues.length > 0) {
+    venues = legacy.venues.map((v) => ({
+      label: String(v.label ?? "").trim(),
+      courtCount:
+        v.courtCount === undefined || v.courtCount === null
+          ? null
+          : typeof v.courtCount === "number"
+            ? v.courtCount
+            : null,
+    }));
+  } else if (Array.isArray(legacy.locations) && legacy.locations.length > 0) {
+    const cc = legacy.courtCount ?? null;
+    venues = legacy.locations.map((label, i) => ({
+      label: String(label).trim(),
+      courtCount: i === 0 ? cc : null,
+    }));
+  } else {
+    const lb = t.locationLabel.trim() || "Por definir";
+    venues = [{ label: lb, courtCount: legacy.courtCount ?? null }];
+  }
+
+  venues = venues.filter((v) => v.label.length > 0);
+  if (venues.length === 0) {
+    venues = [{ label: t.locationLabel.trim() || "Por definir", courtCount: null }];
+  }
+
+  const label = venues.map((v) => v.label).join(" · ");
+  const merged = { ...t, venues, locationLabel: label } as Record<string, unknown>;
+  delete merged.locations;
+  delete merged.courtCount;
+  return merged as TournamentMock;
 }
 
 export function getTournamentBySlug(slug: string): TournamentMock | undefined {

@@ -210,6 +210,18 @@ function isCategoryMock(value: unknown): value is CategoryMock {
   return o.subdivisions.every(isSubdivisionMock);
 }
 
+function isTournamentVenueEntry(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const o = value as Record<string, unknown>;
+  const ccOk =
+    o.courtCount === undefined ||
+    o.courtCount === null ||
+    (typeof o.courtCount === "number" &&
+      Number.isInteger(o.courtCount) &&
+      o.courtCount >= 0);
+  return typeof o.label === "string" && ccOk;
+}
+
 function isTournamentMock(value: unknown): value is TournamentMock {
   if (!value || typeof value !== "object") return false;
   const o = value as Record<string, unknown>;
@@ -222,6 +234,9 @@ function isTournamentMock(value: unknown): value is TournamentMock {
     (Array.isArray(o.locations) && o.locations.every((x: unknown) => typeof x === "string"));
   const courtOk =
     o.courtCount === undefined || o.courtCount === null || typeof o.courtCount === "number";
+  const venuesOk =
+    o.venues === undefined ||
+    (Array.isArray(o.venues) && o.venues.every(isTournamentVenueEntry));
   return (
     typeof o.slug === "string" &&
     typeof o.name === "string" &&
@@ -238,6 +253,7 @@ function isTournamentMock(value: unknown): value is TournamentMock {
     o.categories.every(isCategoryMock) &&
     scheduleOk &&
     locsOk &&
-    courtOk
+    courtOk &&
+    venuesOk
   );
 }
