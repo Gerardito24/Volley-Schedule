@@ -86,6 +86,23 @@ export type TournamentMock = {
   schedule?: TournamentScheduleMock | null;
 };
 
+export type PlayerEntry = {
+  id: string;
+  name: string;
+  jerseyNumber: string;
+  affiliationNumber: string;
+  birthDate: string;
+};
+
+export type CoachEntry = {
+  name: string;
+  affiliationNumber: string;
+  nivel: string;
+  phone: string;
+  email: string;
+  photoDataUrl?: string | null;
+};
+
 export type RegistrationRowMock = {
   id: string;
   tournamentSlug: string;
@@ -109,6 +126,16 @@ export type RegistrationRowMock = {
   registeredAt: string;
   categoryId: string;
   subdivisionId?: string | null;
+  // Extended fields (Cognito replica)
+  clubAffiliationNumber?: string;
+  representative?: { name: string; email: string; phone: string };
+  coach?: CoachEntry;
+  hasAssistant?: boolean;
+  assistant?: CoachEntry | null;
+  players?: PlayerEntry[];
+  comments?: string;
+  signatureDataUrl?: string | null;
+  termsAccepted?: boolean;
 };
 
 export const tournaments: TournamentMock[] = [
