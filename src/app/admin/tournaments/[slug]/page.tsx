@@ -19,6 +19,7 @@ import type { CategoryMock, TournamentMock, TournamentVenue } from "@/lib/mock-d
 import {
   registrationRows as seedRegistrationRows,
   tournaments as seedTournaments,
+  formatRegistrationDivisionLabel,
   formatTournamentLocationsLine,
   normalizeTournament,
 } from "@/lib/mock-data";
@@ -97,6 +98,8 @@ function tournamentToGeneralDraft(t: TournamentMock): GeneralDraft {
 function categoryToDraft(c: CategoryMock) {
   return {
     label: c.label,
+    ageLabel: c.ageLabel,
+    divisionId: c.divisionId,
     feeInput: centsToInput(c.feeCents),
     maxTeamsInput: c.maxTeams != null ? String(c.maxTeams) : "",
   };
@@ -138,6 +141,8 @@ function AdminTournamentDetailInner() {
   const [generalSaved, setGeneralSaved] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<{
     label: string;
+    ageLabel: string;
+    divisionId: string;
     feeInput: string;
     maxTeamsInput: string;
   } | null>(null);
@@ -173,6 +178,26 @@ function AdminTournamentDetailInner() {
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
     [pathname, router, searchParams],
+  );
+
+  const syncRegistrationDivisionLabelsForCategory = useCallback(
+    (fullTournament: TournamentMock, categoryId: string, category: CategoryMock) => {
+      const mergedRows = mergeAdminRegistrations(
+        seedRegistrationRows,
+        readStoredRegistrations(),
+      );
+      for (const r of mergedRows) {
+        if (r.tournamentSlug !== slug || r.categoryId !== categoryId) continue;
+        const nextLabel = formatRegistrationDivisionLabel(
+          fullTournament,
+          category,
+          r.subdivisionId ?? null,
+        );
+        if (r.divisionLabel === nextLabel) continue;
+        upsertStoredRegistration({ ...r, divisionLabel: nextLabel });
+      }
+    },
+    [slug],
   );
 
   const persistTournament = useCallback(
@@ -217,21 +242,6 @@ function AdminTournamentDetailInner() {
     window.setTimeout(() => setGeneralSaved(false), 2000);
   }, [generalDraft, persistTournament, tournament]);
 
-  const syncDivisionLabels = useCallback(
-    (categoryId: string, newLabel: string) => {
-      const mergedRows = mergeAdminRegistrations(
-        seedRegistrationRows,
-        readStoredRegistrations(),
-      );
-      for (const r of mergedRows) {
-        if (r.tournamentSlug !== slug || r.categoryId !== categoryId) continue;
-        if (r.divisionLabel === newLabel) continue;
-        upsertStoredRegistration({ ...r, divisionLabel: newLabel });
-      }
-    },
-    [slug],
-  );
-
   const handleSaveCategory = useCallback(() => {
     if (!tournament || !selectedCategory || !categoryDraft) return;
     const feeParsed = dollarsToCents(categoryDraft.feeInput);
@@ -249,29 +259,41 @@ function AdminTournamentDetailInner() {
     const feeTrim = categoryDraft.feeInput.trim();
     const nextFeeCents =
       feeTrim === "" ? null : (feeParsed ?? selectedCategory.feeCents);
+    const ageLabel = categoryDraft.ageLabel.trim();
+    const divisionId =
+      tournament.divisions.some((d) => d.id === categoryDraft.divisionId)
+        ? categoryDraft.divisionId
+        : (tournament.divisions[0]?.id ?? selectedCategory.divisionId);
+
+    const nextCat: CategoryMock = {
+      ...selectedCategory,
+      label: newLabel,
+      ageLabel,
+      divisionId,
+      feeCents: nextFeeCents,
+      maxTeams: nextMax,
+    };
     const nextCategories = tournament.categories.map((c) =>
-      c.id === selectedCategory.id
-        ? {
-            ...c,
-            label: newLabel,
-            feeCents: nextFeeCents,
-            maxTeams: nextMax,
-          }
-        : c,
+      c.id === selectedCategory.id ? nextCat : c,
     );
 
-    const next: TournamentMock = { ...tournament, categories: nextCategories };
+    const next: TournamentMock = normalizeTournament({
+      ...tournament,
+      categories: nextCategories,
+    });
     persistTournament(next);
-    if (newLabel !== selectedCategory.label) {
-      syncDivisionLabels(selectedCategory.id, newLabel);
-    }
+    syncRegistrationDivisionLabelsForCategory(
+      next,
+      selectedCategory.id,
+      nextCat,
+    );
     setCategorySaved(true);
     window.setTimeout(() => setCategorySaved(false), 2000);
   }, [
     categoryDraft,
     persistTournament,
     selectedCategory,
-    syncDivisionLabels,
+    syncRegistrationDivisionLabelsForCategory,
     tournament,
   ]);
 
@@ -360,7 +382,7 @@ function AdminTournamentDetailInner() {
             Categoría: {selectedCategory.label}
           </h2>
           <p className="mt-1 text-xs text-zinc-500">
-            Editá nombre, tarifa y cupo. Los cambios se guardan en este navegador
+            Editá nombre, edad, división del torneo, tarifa y cupo. Los cambios se guardan en este navegador
             (localStorage).
           </p>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -378,6 +400,42 @@ function AdminTournamentDetailInner() {
                 }
                 className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
               />
+            </label>
+            <label className="block text-sm">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                Edad o grupo
+              </span>
+              <input
+                type="text"
+                value={categoryDraft.ageLabel}
+                onChange={(e) =>
+                  setCategoryDraft((d) =>
+                    d ? { ...d, ageLabel: e.target.value } : d,
+                  )
+                }
+                placeholder="Ej. 14U"
+                className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+            </label>
+            <label className="block text-sm sm:col-span-2">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                División del torneo
+              </span>
+              <select
+                value={categoryDraft.divisionId}
+                onChange={(e) =>
+                  setCategoryDraft((d) =>
+                    d ? { ...d, divisionId: e.target.value } : d,
+                  )
+                }
+                className="mt-1 w-full max-w-md rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              >
+                {tournament.divisions.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="block text-sm">
               <span className="font-medium text-zinc-700 dark:text-zinc-300">
@@ -790,6 +848,8 @@ function AdminTournamentDetailInner() {
         <ul className="mt-4 divide-y divide-zinc-200 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
           {tournament.categories.map((c) => {
             const eff = effectiveCategoryFeeCents(c, tournament);
+            const div = tournament.divisions.find((d) => d.id === c.divisionId);
+            const meta = [c.ageLabel?.trim(), div?.label].filter(Boolean).join(" · ");
             return (
               <li key={c.id} className="px-0">
                 <button
@@ -797,8 +857,15 @@ function AdminTournamentDetailInner() {
                   onClick={() => setCategoryQuery(c.id)}
                   className="flex w-full flex-wrap items-start justify-between gap-2 px-4 py-4 text-left text-sm transition hover:bg-zinc-50 dark:hover:bg-zinc-800/80"
                 >
-                  <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-                    {c.label}
+                  <span className="min-w-0 flex-1">
+                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                      {c.label}
+                    </span>
+                    {meta ? (
+                      <span className="mt-0.5 block text-xs font-normal text-zinc-500">
+                        {meta}
+                      </span>
+                    ) : null}
                   </span>
                   <span className="text-zinc-600 dark:text-zinc-400">
                     {eff != null ? formatMoney(eff) : "—"}

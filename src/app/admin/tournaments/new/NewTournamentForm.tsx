@@ -2,13 +2,20 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { appendStoredTournament, readStoredTournaments } from "@/lib/local-tournaments";
 import { mergeAdminTournaments } from "@/lib/merge-tournaments";
 import type { CategoryMock, TournamentMock } from "@/lib/mock-data";
 import { tournaments as seedTournaments } from "@/lib/mock-data";
 import { slugify } from "@/lib/slugify";
 const PROMO_MAX_BYTES = 400 * 1024;
+
+const AGE_SUGGESTIONS = ["10U", "12U", "14U", "16U", "18U", "Open"];
+
+type DivisionFormRow = {
+  key: string;
+  label: string;
+};
 
 type SubdivisionFormRow = {
   key: string;
@@ -18,6 +25,8 @@ type SubdivisionFormRow = {
 
 type CategoryFormRow = {
   key: string;
+  ageLabel: string;
+  divisionId: string;
   label: string;
   feeUsd: string;
   maxTeams: string;
@@ -49,6 +58,11 @@ export function NewTournamentForm() {
   const router = useRouter();
   const promoInputRef = useRef<HTMLInputElement>(null);
 
+  const initialFirstDivision = useMemo(
+    () => ({ key: crypto.randomUUID(), label: "" }),
+    [],
+  );
+
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [locationLabel, setLocationLabel] = useState("");
@@ -62,9 +76,15 @@ export function NewTournamentForm() {
   const [promoImageDataUrl, setPromoImageDataUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<TournamentMock["status"]>("draft");
 
+  const [tournamentDivisions, setTournamentDivisions] = useState<DivisionFormRow[]>([
+    initialFirstDivision,
+  ]);
+
   const [categories, setCategories] = useState<CategoryFormRow[]>([
     {
       key: crypto.randomUUID(),
+      ageLabel: "",
+      divisionId: initialFirstDivision.key,
       label: "",
       feeUsd: "",
       maxTeams: "",
@@ -74,11 +94,38 @@ export function NewTournamentForm() {
 
   const [error, setError] = useState<string | null>(null);
 
+  function addDivision() {
+    setTournamentDivisions((rows) => [...rows, { key: crypto.randomUUID(), label: "" }]);
+  }
+
+  function removeDivision(key: string) {
+    setTournamentDivisions((rows) => {
+      if (rows.length <= 1) return rows;
+      const next = rows.filter((r) => r.key !== key);
+      const fallback = next[0]!.key;
+      setCategories((cats) =>
+        cats.map((c) =>
+          c.divisionId === key ? { ...c, divisionId: fallback } : c,
+        ),
+      );
+      return next;
+    });
+  }
+
+  function updateDivision(key: string, label: string) {
+    setTournamentDivisions((rows) =>
+      rows.map((r) => (r.key === key ? { ...r, label } : r)),
+    );
+  }
+
   function addCategory() {
+    const firstId = tournamentDivisions[0]?.key ?? "";
     setCategories((rows) => [
       ...rows,
       {
         key: crypto.randomUUID(),
+        ageLabel: "",
+        divisionId: firstId,
         label: "",
         feeUsd: "",
         maxTeams: "",
@@ -207,10 +254,27 @@ export function NewTournamentForm() {
     }
     const publicEntryFeeCents = publicEntryFeeUsd.trim() ? publicEntryParsed : null;
 
+    const divisionsPayload = tournamentDivisions
+      .map((r) => ({ id: r.key, label: r.label.trim() }))
+      .filter((d) => d.label.length > 0);
+    if (divisionsPayload.length === 0) {
+      setError("Agrega al menos una división del torneo (sección Divisiones del torneo).");
+      return;
+    }
+    const divisionIds = new Set(divisionsPayload.map((d) => d.id));
+
     const categoryPayload: CategoryMock[] = [];
 
     for (let i = 0; i < categories.length; i++) {
       const row = categories[i];
+      if (!row.ageLabel.trim()) {
+        setError(`Categoría ${i + 1}: indica la edad o grupo (ej. 14U), o elegí una sugerencia.`);
+        return;
+      }
+      if (!row.divisionId || !divisionIds.has(row.divisionId)) {
+        setError(`Categoría ${i + 1}: elegí una división del torneo.`);
+        return;
+      }
       if (!row.label.trim()) {
         setError(`Categoría ${i + 1}: indica un nombre.`);
         return;
@@ -283,6 +347,8 @@ export function NewTournamentForm() {
       categoryPayload.push({
         id: `local-cat-${crypto.randomUUID()}`,
         label: row.label.trim(),
+        ageLabel: row.ageLabel.trim(),
+        divisionId: row.divisionId,
         feeCents: catFee,
         maxTeams,
         subdivisions: subs,
@@ -310,6 +376,7 @@ export function NewTournamentForm() {
       publicEntryFeeCents,
       promoImageDataUrl,
       status,
+      divisions: divisionsPayload,
       categories: categoryPayload,
     };
 
@@ -507,6 +574,52 @@ export function NewTournamentForm() {
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            Divisiones del torneo
+          </h3>
+          <button
+            type="button"
+            onClick={addDivision}
+            className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+          >
+            + Añadir división
+          </button>
+        </div>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Definí primero las divisiones (ej. Oro, Plata, Femenino). Cada categoría elegirá una de esta lista.
+        </p>
+        <ul className="space-y-2">
+          {tournamentDivisions.map((div, didx) => (
+            <li
+              key={div.key}
+              className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700"
+            >
+              <span className="w-8 shrink-0 text-xs font-medium text-zinc-400">
+                {didx + 1}.
+              </span>
+              <input
+                type="text"
+                value={div.label}
+                onChange={(e) => updateDivision(div.key, e.target.value)}
+                placeholder="Nombre de la división"
+                className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+              />
+              {tournamentDivisions.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => removeDivision(div.key)}
+                  className="shrink-0 text-xs text-red-600 hover:underline dark:text-red-400"
+                >
+                  Quitar
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
             Categorías
           </h3>
           <button
@@ -547,6 +660,43 @@ export function NewTournamentForm() {
                 ) : null}
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    Edad o grupo
+                  </label>
+                  <input
+                    list={`age-dl-${row.key}`}
+                    value={row.ageLabel}
+                    onChange={(e) =>
+                      updateCategory(row.key, { ageLabel: e.target.value })
+                    }
+                    placeholder="Ej. 14U o Open"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                  />
+                  <datalist id={`age-dl-${row.key}`}>
+                    {AGE_SUGGESTIONS.map((a) => (
+                      <option key={a} value={a} />
+                    ))}
+                  </datalist>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    División del torneo
+                  </label>
+                  <select
+                    value={row.divisionId}
+                    onChange={(e) =>
+                      updateCategory(row.key, { divisionId: e.target.value })
+                    }
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                  >
+                    {tournamentDivisions.map((d) => (
+                      <option key={d.key} value={d.key}>
+                        {d.label.trim() || "(sin nombre aún)"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
                     Nombre de la categoría

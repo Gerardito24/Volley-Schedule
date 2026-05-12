@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type {
-  CategoryMock,
-  RegistrationRowMock,
-  TournamentMock,
+import {
+  type CategoryMock,
+  type RegistrationRowMock,
+  type TournamentMock,
+  formatRegistrationDivisionLabel,
 } from "@/lib/mock-data";
 import { appendStoredRegistration } from "@/lib/local-registrations";
 import { createStubRosterFromRegistration } from "@/lib/local-team-rosters";
@@ -18,6 +19,7 @@ export type RegisterTournamentPayload = Pick<
   | "registrationDeadlineOn"
   | "categories"
   | "registrationFeeCents"
+  | "divisions"
 >;
 
 function dollarsToCents(s: string): number | null {
@@ -33,12 +35,11 @@ function centsToInput(c: number): string {
 }
 
 function buildDivisionLabel(
+  tournament: TournamentMock,
   category: CategoryMock,
   subdivisionId: string | null,
 ): string {
-  if (!subdivisionId) return category.label;
-  const sub = category.subdivisions.find((s) => s.id === subdivisionId);
-  return sub ? `${category.label} · ${sub.label}` : category.label;
+  return formatRegistrationDivisionLabel(tournament, category, subdivisionId);
 }
 
 export function TournamentRegisterForm({
@@ -114,7 +115,11 @@ export function TournamentRegisterForm({
 
     const now = new Date().toISOString();
     const subId = subs.length > 0 ? (subdivisionId as string) : null;
-    const divisionLabel = buildDivisionLabel(category, subId);
+    const divisionLabel = buildDivisionLabel(
+      tournament as TournamentMock,
+      category,
+      subId,
+    );
 
     const row: RegistrationRowMock = {
       id: `local-reg-${crypto.randomUUID()}`,

@@ -21,6 +21,9 @@ export default async function RegisterPage(props: Props) {
   const categoryLines = tournament.categories.map((c) => {
     const eff = effectiveCategoryFeeCents(c, tournament);
     const feeStr = eff != null ? formatMoney(eff) : "—";
+    const div = tournament.divisions.find((d) => d.id === c.divisionId);
+    const divPart = div?.label ? ` · ${div.label}` : "";
+    const agePart = c.ageLabel.trim() ? `${c.ageLabel.trim()} · ` : "";
     const subs =
       c.subdivisions.length > 0
         ? ` (${c.subdivisions
@@ -31,7 +34,7 @@ export default async function RegisterPage(props: Props) {
             )
             .join(", ")})`
         : "";
-    return `${c.label}${subs}: ${feeStr}`;
+    return `${agePart}${c.label}${divPart}${subs}: ${feeStr}`;
   });
 
   const registerPayload = {
@@ -39,6 +42,7 @@ export default async function RegisterPage(props: Props) {
     name: tournament.name,
     registrationDeadlineOn: tournament.registrationDeadlineOn,
     categories: tournament.categories,
+    divisions: tournament.divisions,
     registrationFeeCents: tournament.registrationFeeCents,
   };
 

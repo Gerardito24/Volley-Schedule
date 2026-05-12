@@ -1,6 +1,7 @@
 import type {
   CategoryMock,
   SubdivisionMock,
+  TournamentDivisionMock,
   TournamentMock,
 } from "@/lib/mock-data";
 import { normalizeTournament } from "@/lib/mock-data";
@@ -195,12 +196,22 @@ function isSubdivisionMock(value: unknown): value is SubdivisionMock {
   return typeof o.id === "string" && typeof o.label === "string" && maxOk;
 }
 
+function isTournamentDivisionMock(value: unknown): value is TournamentDivisionMock {
+  if (!value || typeof value !== "object") return false;
+  const o = value as Record<string, unknown>;
+  return typeof o.id === "string" && typeof o.label === "string";
+}
+
 function isCategoryMock(value: unknown): value is CategoryMock {
   if (!value || typeof value !== "object") return false;
   const o = value as Record<string, unknown>;
+  const ageOk = o.ageLabel === undefined || typeof o.ageLabel === "string";
+  const divIdOk = o.divisionId === undefined || typeof o.divisionId === "string";
   if (
     typeof o.id !== "string" ||
     typeof o.label !== "string" ||
+    !ageOk ||
+    !divIdOk ||
     !(o.feeCents === null || typeof o.feeCents === "number") ||
     !(o.maxTeams === null || typeof o.maxTeams === "number") ||
     !Array.isArray(o.subdivisions)
@@ -237,6 +248,9 @@ function isTournamentMock(value: unknown): value is TournamentMock {
   const venuesOk =
     o.venues === undefined ||
     (Array.isArray(o.venues) && o.venues.every(isTournamentVenueEntry));
+  const divisionsOk =
+    o.divisions === undefined ||
+    (Array.isArray(o.divisions) && o.divisions.every(isTournamentDivisionMock));
   return (
     typeof o.slug === "string" &&
     typeof o.name === "string" &&
@@ -254,6 +268,7 @@ function isTournamentMock(value: unknown): value is TournamentMock {
     scheduleOk &&
     locsOk &&
     courtOk &&
-    venuesOk
+    venuesOk &&
+    divisionsOk
   );
 }

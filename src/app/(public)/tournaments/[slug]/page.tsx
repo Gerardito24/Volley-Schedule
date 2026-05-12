@@ -75,6 +75,8 @@ export default async function TournamentDetailPage(props: Props) {
         <ul className="mt-4 divide-y divide-zinc-200 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
           {tournament.categories.map((c) => {
             const eff = effectiveCategoryFeeCents(c, tournament);
+            const div = tournament.divisions.find((d) => d.id === c.divisionId);
+            const meta = [c.ageLabel?.trim(), div?.label].filter(Boolean).join(" · ");
             return (
               <li key={c.id} className="px-4 py-4 text-sm">
                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -86,6 +88,9 @@ export default async function TournamentDetailPage(props: Props) {
                     {c.maxTeams != null ? ` · máx. ${c.maxTeams} equipos` : ""}
                   </span>
                 </div>
+                {meta ? (
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{meta}</p>
+                ) : null}
                 {c.subdivisions.length > 0 ? (
                   <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
                     Divisiones:{" "}
