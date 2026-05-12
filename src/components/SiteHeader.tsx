@@ -8,14 +8,14 @@ const links = [
 export function SiteHeader() {
   return (
     <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
+      <div className="flex h-14 w-full items-center justify-between px-4 sm:px-6 lg:px-8 xl:px-12">
         <Link
           href="/"
           className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
         >
           VolleySchedule · Sitio público
         </Link>
-        <nav className="flex gap-6 text-sm">
+        <nav className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-sm sm:gap-x-6">
           {links.map((l) => (
             <Link
               key={l.href}

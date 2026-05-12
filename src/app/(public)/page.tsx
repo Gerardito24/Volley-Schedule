@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 py-12">
+    <main className="flex w-full flex-1 flex-col gap-10 py-12">
       <section className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 md:p-12">
         <p className="text-sm font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
           Website público (preview)
@@ -10,7 +10,7 @@ export default function Home() {
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 md:text-4xl">
           Registro unificado de torneos
         </h1>
-        <p className="mt-4 max-w-2xl text-lg leading-relaxed text-zinc-600 dark:text-zinc-300">
+        <p className="mt-4 text-lg leading-relaxed text-zinc-600 dark:text-zinc-300">
           Un solo lugar para que los equipos se inscriban, paguen y sigan el estado de su
           solicitud. Los itinerarios y la marca siguen en el sitio principal.
         </p>

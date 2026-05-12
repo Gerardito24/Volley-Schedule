@@ -6,7 +6,9 @@ export default function PublicLayout({
   return (
     <>
       <SiteHeader />
-      <div className="flex flex-1 flex-col">{children}</div>
+      <div className="flex min-h-0 w-full flex-1 flex-col px-4 sm:px-6 lg:px-8 xl:px-12">
+        {children}
+      </div>
     </>
   );
 }

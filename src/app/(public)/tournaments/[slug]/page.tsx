@@ -37,7 +37,7 @@ export default async function TournamentDetailPage(props: Props) {
   const open = tournament.status === "open";
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-10">
+    <main className="flex w-full flex-1 flex-col gap-8 py-10">
       <div>
         <Link
           href="/tournaments"

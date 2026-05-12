@@ -45,7 +45,7 @@ export default async function RegisterPage(props: Props) {
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-8 px-4 py-10">
+    <main className="flex w-full flex-1 flex-col gap-8 py-10">
       <div>
         <Link
           href={`/tournaments/${tournament.slug}`}
