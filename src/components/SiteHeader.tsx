@@ -16,7 +16,7 @@ function VolleyballIcon({ className }: { className?: string }) {
       className={className}
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="2.2"
       aria-hidden="true"
     >
       <circle cx="16" cy="16" r="13" />
@@ -33,18 +33,19 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-200/80 bg-white/95 shadow-sm backdrop-blur-md dark:border-zinc-800/80 dark:bg-zinc-950/95">
-      <div className="flex h-16 w-full items-center justify-between px-4 sm:px-6 lg:px-8 xl:px-12">
-        {/* Logo */}
+      <div className="flex w-full flex-col items-center gap-3 px-4 py-4 sm:px-6 lg:px-8">
+
+        {/* Logo — centered, large */}
         <Link
           href="/"
-          className="group flex items-center gap-2 text-base font-bold tracking-tight text-zinc-800 transition hover:text-emerald-700 dark:text-zinc-100 dark:hover:text-emerald-400"
+          className="group flex items-center gap-2.5 text-xl font-extrabold tracking-tight text-zinc-800 transition hover:text-emerald-700 dark:text-zinc-100 dark:hover:text-emerald-400"
         >
-          <VolleyballIcon className="h-6 w-6 text-emerald-600 transition group-hover:rotate-12 dark:text-emerald-400" />
+          <VolleyballIcon className="h-8 w-8 text-emerald-600 transition duration-300 group-hover:rotate-12 dark:text-emerald-400" />
           <span>VolleySchedule</span>
         </Link>
 
-        {/* Nav */}
-        <nav className="flex items-center gap-1">
+        {/* Nav pills — centered row */}
+        <nav className="flex items-center gap-2">
           {NAV_LINKS.map((l) => {
             const active =
               l.href === "/"
@@ -55,7 +56,7 @@ export function SiteHeader() {
                 key={l.href}
                 href={l.href}
                 className={[
-                  "rounded-full px-5 py-2 text-sm font-semibold transition",
+                  "rounded-full px-6 py-2 text-sm font-semibold transition",
                   active
                     ? "bg-emerald-600 text-white shadow-sm"
                     : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/70 dark:hover:text-zinc-100",
