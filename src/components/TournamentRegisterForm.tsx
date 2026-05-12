@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   CategoryMock,
   RegistrationRowMock,
@@ -18,6 +18,18 @@ export type RegisterTournamentPayload = Pick<
   | "categories"
   | "registrationFeeCents"
 >;
+
+function dollarsToCents(s: string): number | null {
+  const t = s.trim().replace(",", ".");
+  if (!t) return null;
+  const n = Number.parseFloat(t);
+  if (Number.isNaN(n) || n < 0) return null;
+  return Math.round(n * 100);
+}
+
+function centsToInput(c: number): string {
+  return (c / 100).toFixed(2);
+}
 
 function buildDivisionLabel(
   category: CategoryMock,
@@ -43,6 +55,7 @@ export function TournamentRegisterForm({
   const [lastCreated, setLastCreated] = useState<RegistrationRowMock | null>(
     null,
   );
+  const [feeUsdInput, setFeeUsdInput] = useState("");
 
   const category = useMemo(
     () => tournament.categories.find((c) => c.id === categoryId),
@@ -56,6 +69,18 @@ export function TournamentRegisterForm({
       tournament as unknown as TournamentMock,
     );
   }, [category, tournament]);
+
+  useEffect(() => {
+    if (!category) {
+      setFeeUsdInput("");
+      return;
+    }
+    const suggested = effectiveCategoryFeeCents(
+      category,
+      tournament as unknown as TournamentMock,
+    );
+    setFeeUsdInput(suggested != null ? centsToInput(suggested) : "");
+  }, [category, categoryId, subdivisionId, tournament]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,10 +99,16 @@ export function TournamentRegisterForm({
       return;
     }
 
+    const parsedFee = dollarsToCents(feeUsdInput);
+    if (feeUsdInput.trim() && parsedFee === null) {
+      setError("Tarifa inválida (ej. 250 o 250.50).");
+      return;
+    }
+    const fee = parsedFee ?? feeCents ?? 0;
+
     const now = new Date().toISOString();
     const subId = subs.length > 0 ? (subdivisionId as string) : null;
     const divisionLabel = buildDivisionLabel(category, subId);
-    const fee = feeCents ?? 0;
 
     const row: RegistrationRowMock = {
       id: `local-reg-${crypto.randomUUID()}`,
@@ -201,16 +232,30 @@ export function TournamentRegisterForm({
         />
       </div>
 
-      <p className="text-xs text-zinc-500">
-        Tarifa aplicable:{" "}
-        {feeCents != null
-          ? new Intl.NumberFormat("es-PR", {
-              style: "currency",
-              currency: "USD",
-            }).format(feeCents / 100)
-          : "—"}{" "}
-        · Límite: {tournament.registrationDeadlineOn}
-      </p>
+      <div>
+        <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+          Tarifa de inscripción (USD)
+        </label>
+        <input
+          value={feeUsdInput}
+          onChange={(e) => setFeeUsdInput(e.target.value)}
+          inputMode="decimal"
+          placeholder={
+            feeCents != null
+              ? `Sugerida: ${new Intl.NumberFormat("es-PR", {
+                  style: "currency",
+                  currency: "USD",
+                }).format(feeCents / 100)}`
+              : "—"
+          }
+          className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+        />
+        <p className="mt-1 text-xs text-zinc-500">
+          Podés cambiar el monto antes de enviar. Se actualiza al elegir otra
+          categoría o subdivisión. · Límite inscripciones:{" "}
+          {tournament.registrationDeadlineOn}
+        </p>
+      </div>
 
       <button
         type="submit"
