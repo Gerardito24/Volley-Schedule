@@ -4,15 +4,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CLUB_REGISTRY_SLUG,
   getTournamentBySlug,
+  type CategoryGender,
   type CategoryMock,
   type CoachEntry,
   type PlayerEntry,
   type RegistrationRowMock,
   type TournamentMock,
+  categoryGenderLabel,
   formatRegistrationDivisionLabel,
 } from "@/lib/mock-data";
 import { appendStoredRegistration } from "@/lib/local-registrations";
-import { upsertClubProfile, readClubProfiles } from "@/lib/local-club-profiles";
+import { upsertClubProfile } from "@/lib/local-club-profiles";
 import { createStubRosterFromRegistration } from "@/lib/local-team-rosters";
 import { downloadRegistrationPdf } from "@/lib/registrationPdf";
 import { applyClubProfileToFormDraft } from "@/lib/registration-reuse";
@@ -55,6 +57,18 @@ function buildDivisionLabel(
   return formatRegistrationDivisionLabel(tournament, category, subdivisionId);
 }
 
+/** Nombre de equipo guardado: edad · género · (coach o apoderado si el coach es el mismo y no se repitió). */
+function buildClubTeamDisplayName(
+  ageLabel: string,
+  gender: CategoryGender,
+  coachName: string,
+  repName: string,
+): string {
+  const namePart = coachName.trim() || repName.trim();
+  const parts = [ageLabel.trim(), categoryGenderLabel(gender), namePart].filter(Boolean);
+  return parts.join(" · ");
+}
+
 export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProfile | null }) {
   const fullTournament = useMemo(() => getTournamentBySlug(CLUB_REGISTRY_SLUG), []);
 
@@ -64,7 +78,8 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
   const [step, setStep] = useState<1 | 2>(1);
 
   const [pueblo, setPueblo] = useState("");
-  const [teamName, setTeamName] = useState("");
+  const [teamAgeLabel, setTeamAgeLabel] = useState("");
+  const [teamGender, setTeamGender] = useState<CategoryGender>("mixto");
   const [clubName, setClubName] = useState("");
   const [clubAffiliationNumber, setClubAffiliationNumber] = useState("");
 
@@ -86,13 +101,6 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
   const [done, setDone] = useState(false);
   const [lastCreated, setLastCreated] = useState<RegistrationRowMock | null>(null);
 
-  const [savedProfiles, setSavedProfiles] = useState<ClubProfile[]>([]);
-
-  useEffect(() => {
-    if (step !== 2) return;
-    setSavedProfiles(readClubProfiles());
-  }, [step]);
-
   useEffect(() => {
     if (!initialProfile) return;
     const d = applyClubProfileToFormDraft(initialProfile);
@@ -105,16 +113,10 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
     setSignatureDataUrl(null);
   }, [initialProfile]);
 
-  function applyProfileShortcut(p: ClubProfile) {
-    const d = applyClubProfileToFormDraft(p);
-    setClubName(d.clubName);
-    setPueblo(p.pueblo ?? "");
-    setRepName(d.repName);
-    setRepEmail(d.repEmail);
-    setRepPhone(d.repPhone);
-    setTerms([false, false, false]);
-    setSignatureDataUrl(null);
-  }
+  const autoTeamNamePreview = useMemo(
+    () => buildClubTeamDisplayName(teamAgeLabel, teamGender, coach.name, repName),
+    [teamAgeLabel, teamGender, coach.name, repName],
+  );
 
   function updatePlayer<K extends keyof PlayerEntry>(idx: number, key: K, val: PlayerEntry[K]) {
     setPlayers((prev) => prev.map((pl, i) => (i === idx ? { ...pl, [key]: val } : pl)));
@@ -156,6 +158,10 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
         setError("Indica el municipio / pueblo del club.");
         return;
       }
+      if (!teamAgeLabel.trim()) {
+        setError("Indica la edad o categoría del equipo (ej. 14U).");
+        return;
+      }
       if (!repName.trim()) {
         setError("Indica el nombre del apoderado/a.");
         return;
@@ -168,10 +174,14 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
         setError("Indica el teléfono del apoderado/a.");
         return;
       }
-      if (!coach.name.trim()) {
-        setError("Indica el nombre del entrenador/a.");
+
+      // Nombre visible del equipo: coach o apoderado si comparten rol; el registro guarda coach.name con fallback.
+      const coachNameResolved = coach.name.trim() || repName.trim();
+      if (!coachNameResolved) {
+        setError("Indica el nombre del entrenador/a, o completa antes el apoderado/a.");
         return;
       }
+
       if (!coach.affiliationNumber.trim()) {
         setError("Indica el número de afiliación del entrenador/a.");
         return;
@@ -200,6 +210,13 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
         return;
       }
 
+      const coachForRow: CoachEntry = {
+        ...coach,
+        name: coachNameResolved,
+      };
+
+      const teamNameStored = buildClubTeamDisplayName(teamAgeLabel, teamGender, coachForRow.name, repName);
+
       const clubSlug = slugify(clubName.trim());
       const now = new Date().toISOString();
       const divisionLabel = buildDivisionLabel(fullTournament, category, null);
@@ -219,7 +236,7 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
         tournamentSlug: fullTournament.slug,
         tournamentName: fullTournament.name,
         divisionLabel,
-        teamName: teamName.trim() || clubName.trim(),
+        teamName: teamNameStored,
         clubName: clubName.trim(),
         status: "approved",
         updatedAt: now.slice(0, 10),
@@ -229,7 +246,7 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
         subdivisionId: null,
         clubAffiliationNumber: clubAffiliationNumber.trim(),
         representative: { name: repName.trim(), email: repEmail.trim(), phone: repPhone.trim() },
-        coach,
+        coach: coachForRow,
         hasAssistant,
         assistant: hasAssistant ? assistant : null,
         players: filledPlayers,
@@ -250,7 +267,8 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
       clubName,
       pueblo,
       clubAffiliationNumber,
-      teamName,
+      teamAgeLabel,
+      teamGender,
       repName,
       repEmail,
       repPhone,
@@ -313,6 +331,8 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
             setStep(1);
             setSignatureDataUrl(null);
             setTerms([false, false, false]);
+            setTeamAgeLabel("");
+            setTeamGender("mixto");
           }}
           className="mt-4 text-sm font-medium text-emerald-800 underline dark:text-emerald-200"
         >
@@ -333,7 +353,10 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
               <p className="font-semibold text-zinc-900 dark:text-zinc-100">1. Información del club y del equipo</p>
               <ul className="mt-1 list-disc pl-5 space-y-1 text-zinc-600 dark:text-zinc-400">
                 <li>Nombre del club, municipio/pueblo, número de afiliación del club y datos del representante.</li>
-                <li>Nombre del equipo en competencia (opcional si aún no tienes división asignada).</li>
+                <li>
+                  Edad o categoría del equipo (ej. 14U), género (femenino / masculino / mixto) y nombre del entrenador/a.
+                  El nombre del equipo en el sistema se arma automáticamente a partir de esos datos.
+                </li>
               </ul>
             </div>
             <div>
@@ -377,28 +400,6 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
         </div>
       ) : null}
 
-      {savedProfiles.length > 0 ? (
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
-          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Perfiles guardados en este dispositivo</p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Carga datos básicos del club y representante (puedes completar coach y roster después).
-          </p>
-          <ul className="mt-3 flex flex-wrap gap-2">
-            {savedProfiles.map((p) => (
-              <li key={p.clubSlug}>
-                <button
-                  type="button"
-                  onClick={() => applyProfileShortcut(p)}
-                  className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-emerald-50 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                >
-                  {p.displayName}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
       <section className="space-y-5">
         <SectionTitle>Información del Equipo</SectionTitle>
         <p className="text-xs text-zinc-500 italic">
@@ -406,14 +407,34 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
           futuras.
         </p>
 
-        <Field label="Nombre del Equipo">
-          <input
-            className={inputCls}
-            placeholder="Nombre del Equipo (Opcional)"
-            value={teamName}
-            onChange={(e) => setTeamName(e.target.value)}
-          />
-        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Edad / categoría del equipo" required hint="Ej. 14U, 16U, Open">
+            <input
+              className={inputCls}
+              placeholder="Ej. 14U"
+              value={teamAgeLabel}
+              onChange={(e) => setTeamAgeLabel(e.target.value)}
+            />
+          </Field>
+          <Field label="Género del equipo" required>
+            <select
+              className={inputCls}
+              value={teamGender}
+              onChange={(e) => setTeamGender(e.target.value as CategoryGender)}
+            >
+              {(["femenino", "masculino", "mixto"] as const).map((g) => (
+                <option key={g} value={g}>
+                  {categoryGenderLabel(g)}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-200">
+          <span className="font-semibold text-zinc-900 dark:text-zinc-50">Nombre del equipo (automático):</span>{" "}
+          <span className="font-medium">{autoTeamNamePreview || "—"}</span>
+        </p>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Nombre del Club" required>
@@ -465,7 +486,7 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
         </div>
       </section>
 
-      <section className="space-y-5">
+      <section className="space-y-3">
         <CoachSection
           title="Entrenador"
           subtitle="Todo entrenador y asistente debe estar afiliado a la Federación Puertorriqueña de Voleibol o debe poseer licencia del DRD vigente a la fecha de la celebración del evento."
@@ -473,6 +494,15 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
           onChange={setCoach}
           required
         />
+        {repName.trim() ? (
+          <button
+            type="button"
+            onClick={() => setCoach((c) => ({ ...c, name: repName.trim() }))}
+            className="text-xs font-medium text-emerald-700 underline hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-200"
+          >
+            Usar nombre del apoderado/a como entrenador/a
+          </button>
+        ) : null}
       </section>
 
       <section>
