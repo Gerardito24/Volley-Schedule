@@ -89,9 +89,26 @@ function SignaturePad({
 }: {
   onChange: (dataUrl: string | null) => void;
 }) {
+  const [mode, setMode] = useState<"draw" | "type">("draw");
+  const [typedName, setTypedName] = useState("");
+
+  // Draw mode
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const hasDrawn = useRef(false);
+  const dpr = useRef(1);
+
+  // Initialise canvas dimensions to physical pixels so lines are sharp
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    dpr.current = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr.current;
+    canvas.height = rect.height * dpr.current;
+    const ctx = canvas.getContext("2d")!;
+    ctx.scale(dpr.current, dpr.current);
+  }, []);
 
   function getPos(
     e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
@@ -99,18 +116,14 @@ function SignaturePad({
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     if ("touches" in e) {
-      const t = e.touches[0];
+      const t = (e as React.TouchEvent).touches[0];
       return { x: t.clientX - rect.left, y: t.clientY - rect.top };
     }
-    return {
-      x: (e as React.MouseEvent).clientX - rect.left,
-      y: (e as React.MouseEvent).clientY - rect.top,
-    };
+    const me = e as React.MouseEvent;
+    return { x: me.clientX - rect.left, y: me.clientY - rect.top };
   }
 
-  function startDraw(
-    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
-  ) {
+  function startDraw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
     e.preventDefault();
     drawing.current = true;
     const ctx = canvasRef.current!.getContext("2d")!;
@@ -119,15 +132,14 @@ function SignaturePad({
     ctx.moveTo(x, y);
   }
 
-  function draw(
-    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
-  ) {
+  function draw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
     e.preventDefault();
     if (!drawing.current) return;
     const ctx = canvasRef.current!.getContext("2d")!;
     ctx.strokeStyle = "#1a1a1a";
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     const { x, y } = getPos(e);
     ctx.lineTo(x, y);
     ctx.stroke();
@@ -143,35 +155,123 @@ function SignaturePad({
     }
   }
 
-  function clear() {
+  function clearDraw() {
     const canvas = canvasRef.current!;
-    canvas.getContext("2d")!.clearRect(0, 0, canvas.width, canvas.height);
+    const ctx = canvas.getContext("2d")!;
+    ctx.clearRect(0, 0, canvas.width / dpr.current, canvas.height / dpr.current);
     hasDrawn.current = false;
     onChange(null);
   }
 
+  // Type mode — render name onto a hidden canvas and export
+  const typeCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  function renderTypedSignature(name: string): string | null {
+    const canvas = typeCanvasRef.current!;
+    const ctx = canvas.getContext("2d")!;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!name.trim()) return null;
+    ctx.font = "italic 48px Georgia, 'Times New Roman', serif";
+    ctx.fillStyle = "#1a1a1a";
+    ctx.textBaseline = "middle";
+    ctx.fillText(name.trim(), 20, canvas.height / 2);
+    return canvas.toDataURL();
+  }
+
+  function handleTypedChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value;
+    setTypedName(v);
+    onChange(renderTypedSignature(v));
+  }
+
+  function switchMode(m: "draw" | "type") {
+    setMode(m);
+    onChange(null);
+    setTypedName("");
+    if (m === "draw") {
+      // Canvas will be re-measured on next paint; reset
+      setTimeout(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        dpr.current = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr.current;
+        canvas.height = rect.height * dpr.current;
+        const ctx = canvas.getContext("2d")!;
+        ctx.scale(dpr.current, dpr.current);
+        hasDrawn.current = false;
+      }, 0);
+    }
+  }
+
   return (
-    <div className="space-y-2">
-      <canvas
-        ref={canvasRef}
-        width={600}
-        height={160}
-        className="w-full rounded-lg border border-zinc-300 bg-white touch-none cursor-crosshair dark:border-zinc-600 dark:bg-zinc-950"
-        onMouseDown={startDraw}
-        onMouseMove={draw}
-        onMouseUp={stopDraw}
-        onMouseLeave={stopDraw}
-        onTouchStart={startDraw}
-        onTouchMove={draw}
-        onTouchEnd={stopDraw}
-      />
-      <button
-        type="button"
-        onClick={clear}
-        className="text-xs font-medium text-zinc-500 hover:text-zinc-800 underline underline-offset-2"
-      >
-        Borrar firma
-      </button>
+    <div className="space-y-3">
+      {/* Mode tabs */}
+      <div className="flex gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1 w-fit dark:border-zinc-700 dark:bg-zinc-800">
+        {(["draw", "type"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => switchMode(m)}
+            className={[
+              "rounded-md px-4 py-1 text-xs font-semibold transition",
+              mode === m
+                ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-zinc-100"
+                : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200",
+            ].join(" ")}
+          >
+            {m === "draw" ? "Dibujar" : "Escribir nombre"}
+          </button>
+        ))}
+      </div>
+
+      {mode === "draw" ? (
+        <div className="space-y-2">
+          <p className="text-xs text-zinc-400">Firma con el mouse o dedo en el recuadro de abajo.</p>
+          <canvas
+            ref={canvasRef}
+            style={{ height: 140 }}
+            className="w-full rounded-lg border border-zinc-300 bg-white touch-none cursor-crosshair dark:border-zinc-600 dark:bg-zinc-950"
+            onMouseDown={startDraw}
+            onMouseMove={draw}
+            onMouseUp={stopDraw}
+            onMouseLeave={stopDraw}
+            onTouchStart={startDraw}
+            onTouchMove={draw}
+            onTouchEnd={stopDraw}
+          />
+          <button
+            type="button"
+            onClick={clearDraw}
+            className="text-xs font-medium text-zinc-500 hover:text-zinc-800 underline underline-offset-2 dark:hover:text-zinc-200"
+          >
+            Borrar firma
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-400">Escribe tu nombre completo. Se guardará como firma.</p>
+          <input
+            type="text"
+            placeholder="Nombre Completo"
+            value={typedName}
+            onChange={handleTypedChange}
+            className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-zinc-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+            style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: "italic", fontSize: 24 }}
+          />
+          {typedName.trim() ? (
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900">
+              <p className="text-xs text-zinc-400 mb-1">Vista previa:</p>
+              <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: "italic", fontSize: 28 }}
+                className="text-zinc-900 dark:text-zinc-100">
+                {typedName}
+              </p>
+            </div>
+          ) : null}
+          {/* Hidden canvas used to export typed name as image */}
+          <canvas ref={typeCanvasRef} width={600} height={100} className="hidden" />
+        </div>
+      )}
     </div>
   );
 }
