@@ -1,14 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { TournamentSchedulePanel } from "@/components/admin/TournamentSchedulePanel";
 import { MergedRegistrationsTable } from "@/components/MergedRegistrationsTable";
-import { readStoredTournaments } from "@/lib/local-tournaments";
+import {
+  readStoredTournaments,
+  upsertStoredTournament,
+} from "@/lib/local-tournaments";
+import {
+  readStoredRegistrations,
+  upsertStoredRegistration,
+} from "@/lib/local-registrations";
 import { mergeAdminTournaments } from "@/lib/merge-tournaments";
-import type { TournamentMock } from "@/lib/mock-data";
-import { tournaments as seedTournaments } from "@/lib/mock-data";
+import { mergeAdminRegistrations } from "@/lib/merge-registrations";
+import type { CategoryMock, TournamentMock } from "@/lib/mock-data";
+import { registrationRows as seedRegistrationRows, tournaments as seedTournaments } from "@/lib/mock-data";
 import { effectiveCategoryFeeCents } from "@/lib/tournament-pricing";
 
 const statusLabel: Record<TournamentMock["status"], string> = {
@@ -24,8 +32,58 @@ function formatMoney(cents: number) {
   }).format(cents / 100);
 }
 
-export default function AdminTournamentDetailPage() {
+function dollarsToCents(s: string): number | null {
+  const t = s.trim().replace(",", ".");
+  if (!t) return null;
+  const n = Number.parseFloat(t);
+  if (Number.isNaN(n)) return null;
+  return Math.round(n * 100);
+}
+
+function centsToInput(c: number | null): string {
+  if (c == null) return "";
+  return (c / 100).toFixed(2);
+}
+
+type GeneralDraft = {
+  name: string;
+  description: string;
+  locationLabel: string;
+  registrationDeadlineOn: string;
+  tournamentStartsOn: string;
+  tournamentEndsOn: string;
+  status: TournamentMock["status"];
+  registrationFeeInput: string;
+  publicEntryFeeInput: string;
+};
+
+function tournamentToGeneralDraft(t: TournamentMock): GeneralDraft {
+  return {
+    name: t.name,
+    description: t.description,
+    locationLabel: t.locationLabel,
+    registrationDeadlineOn: t.registrationDeadlineOn,
+    tournamentStartsOn: t.tournamentStartsOn,
+    tournamentEndsOn: t.tournamentEndsOn,
+    status: t.status,
+    registrationFeeInput: centsToInput(t.registrationFeeCents),
+    publicEntryFeeInput: centsToInput(t.publicEntryFeeCents),
+  };
+}
+
+function categoryToDraft(c: CategoryMock) {
+  return {
+    label: c.label,
+    feeInput: centsToInput(c.feeCents),
+    maxTeamsInput: c.maxTeams != null ? String(c.maxTeams) : "",
+  };
+}
+
+function AdminTournamentDetailInner() {
   const params = useParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const slugParam = params.slug;
   const slug =
     typeof slugParam === "string"
@@ -33,6 +91,8 @@ export default function AdminTournamentDetailPage() {
       : Array.isArray(slugParam)
         ? decodeURIComponent(slugParam[0] ?? "")
         : "";
+
+  const selectedCategoryId = searchParams.get("category");
 
   const [merged, setMerged] = useState<TournamentMock[]>(() =>
     mergeAdminTournaments(seedTournaments, readStoredTournaments()),
@@ -50,6 +110,132 @@ export default function AdminTournamentDetailPage() {
     () => merged.find((t) => t.slug === slug),
     [merged, slug],
   );
+
+  const [generalDraft, setGeneralDraft] = useState<GeneralDraft | null>(null);
+  const [generalSaved, setGeneralSaved] = useState(false);
+  const [categoryDraft, setCategoryDraft] = useState<{
+    label: string;
+    feeInput: string;
+    maxTeamsInput: string;
+  } | null>(null);
+  const [categorySaved, setCategorySaved] = useState(false);
+
+  useEffect(() => {
+    if (!tournament) {
+      setGeneralDraft(null);
+      return;
+    }
+    setGeneralDraft(tournamentToGeneralDraft(tournament));
+  }, [tournament]);
+
+  const selectedCategory = useMemo(() => {
+    if (!tournament || !selectedCategoryId) return null;
+    return tournament.categories.find((c) => c.id === selectedCategoryId) ?? null;
+  }, [tournament, selectedCategoryId]);
+
+  useEffect(() => {
+    if (!selectedCategory) {
+      setCategoryDraft(null);
+      return;
+    }
+    setCategoryDraft(categoryToDraft(selectedCategory));
+  }, [selectedCategory]);
+
+  const setCategoryQuery = useCallback(
+    (categoryId: string | null) => {
+      const p = new URLSearchParams(searchParams.toString());
+      if (categoryId) p.set("category", categoryId);
+      else p.delete("category");
+      const qs = p.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  const persistTournament = useCallback(
+    (next: TournamentMock) => {
+      upsertStoredTournament(next);
+      refreshMerged();
+    },
+    [refreshMerged],
+  );
+
+  const handleSaveGeneral = useCallback(() => {
+    if (!tournament || !generalDraft) return;
+    const next: TournamentMock = {
+      ...tournament,
+      name: generalDraft.name.trim() || tournament.name,
+      description: generalDraft.description,
+      locationLabel: generalDraft.locationLabel.trim() || tournament.locationLabel,
+      registrationDeadlineOn: generalDraft.registrationDeadlineOn,
+      tournamentStartsOn: generalDraft.tournamentStartsOn,
+      tournamentEndsOn: generalDraft.tournamentEndsOn,
+      status: generalDraft.status,
+      registrationFeeCents: dollarsToCents(generalDraft.registrationFeeInput),
+      publicEntryFeeCents: dollarsToCents(generalDraft.publicEntryFeeInput),
+    };
+    persistTournament(next);
+    setGeneralSaved(true);
+    window.setTimeout(() => setGeneralSaved(false), 2000);
+  }, [generalDraft, persistTournament, tournament]);
+
+  const syncDivisionLabels = useCallback(
+    (categoryId: string, newLabel: string) => {
+      const mergedRows = mergeAdminRegistrations(
+        seedRegistrationRows,
+        readStoredRegistrations(),
+      );
+      for (const r of mergedRows) {
+        if (r.tournamentSlug !== slug || r.categoryId !== categoryId) continue;
+        if (r.divisionLabel === newLabel) continue;
+        upsertStoredRegistration({ ...r, divisionLabel: newLabel });
+      }
+    },
+    [slug],
+  );
+
+  const handleSaveCategory = useCallback(() => {
+    if (!tournament || !selectedCategory || !categoryDraft) return;
+    const feeParsed = dollarsToCents(categoryDraft.feeInput);
+    const maxRaw = categoryDraft.maxTeamsInput.trim();
+    let nextMax: number | null;
+    if (maxRaw === "") {
+      nextMax = null;
+    } else {
+      const n = Number.parseInt(maxRaw, 10);
+      nextMax =
+        !Number.isNaN(n) && n >= 0 ? n : selectedCategory.maxTeams;
+    }
+
+    const newLabel = categoryDraft.label.trim() || selectedCategory.label;
+    const feeTrim = categoryDraft.feeInput.trim();
+    const nextFeeCents =
+      feeTrim === "" ? null : (feeParsed ?? selectedCategory.feeCents);
+    const nextCategories = tournament.categories.map((c) =>
+      c.id === selectedCategory.id
+        ? {
+            ...c,
+            label: newLabel,
+            feeCents: nextFeeCents,
+            maxTeams: nextMax,
+          }
+        : c,
+    );
+
+    const next: TournamentMock = { ...tournament, categories: nextCategories };
+    persistTournament(next);
+    if (newLabel !== selectedCategory.label) {
+      syncDivisionLabels(selectedCategory.id, newLabel);
+    }
+    setCategorySaved(true);
+    window.setTimeout(() => setCategorySaved(false), 2000);
+  }, [
+    categoryDraft,
+    persistTournament,
+    selectedCategory,
+    syncDivisionLabels,
+    tournament,
+  ]);
 
   if (!slug) {
     return (
@@ -88,6 +274,142 @@ export default function AdminTournamentDetailPage() {
     );
   }
 
+  if (selectedCategoryId && !selectedCategory) {
+    return (
+      <main className="flex flex-1 flex-col gap-4">
+        <Link
+          href="/admin/tournaments"
+          className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+        >
+          ← Torneos
+        </Link>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Categoría no encontrada.
+        </p>
+        <button
+          type="button"
+          onClick={() => setCategoryQuery(null)}
+          className="w-fit text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+        >
+          Volver al torneo
+        </button>
+      </main>
+    );
+  }
+
+  if (selectedCategory && categoryDraft) {
+    return (
+      <main className="flex flex-1 flex-col gap-8">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setCategoryQuery(null)}
+            className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+          >
+            ← Volver al torneo
+          </button>
+          <span className="text-zinc-400">·</span>
+          <Link
+            href="/admin/tournaments"
+            className="text-sm font-medium text-zinc-600 hover:underline dark:text-zinc-400"
+          >
+            Lista de torneos
+          </Link>
+        </div>
+
+        <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            Categoría: {selectedCategory.label}
+          </h2>
+          <p className="mt-1 text-xs text-zinc-500">
+            Editá nombre, tarifa y cupo. Los cambios se guardan en este navegador
+            (localStorage).
+          </p>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                Nombre
+              </span>
+              <input
+                type="text"
+                value={categoryDraft.label}
+                onChange={(e) =>
+                  setCategoryDraft((d) =>
+                    d ? { ...d, label: e.target.value } : d,
+                  )
+                }
+                className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                Tarifa (USD)
+              </span>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="ej. 250.00"
+                value={categoryDraft.feeInput}
+                onChange={(e) =>
+                  setCategoryDraft((d) =>
+                    d ? { ...d, feeInput: e.target.value } : d,
+                  )
+                }
+                className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+            </label>
+            <label className="block text-sm sm:col-span-2">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                Máximo de equipos (vacío = sin límite)
+              </span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={categoryDraft.maxTeamsInput}
+                onChange={(e) =>
+                  setCategoryDraft((d) =>
+                    d ? { ...d, maxTeamsInput: e.target.value } : d,
+                  )
+                }
+                className="mt-1 w-full max-w-xs rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+            </label>
+          </div>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleSaveCategory}
+              className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+            >
+              Guardar categoría
+            </button>
+            {categorySaved ? (
+              <span className="text-sm text-emerald-600 dark:text-emerald-400">
+                Guardado.
+              </span>
+            ) : null}
+          </div>
+        </section>
+
+        <section>
+          <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            Inscripciones — {selectedCategory.label}
+          </h3>
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            Solo equipos inscritos en esta categoría.
+          </p>
+          <div className="mt-6">
+            <MergedRegistrationsTable
+              tournamentSlug={slug}
+              categoryId={selectedCategory.id}
+              hideTournamentColumn
+            />
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="flex flex-1 flex-col gap-10">
       <div>
@@ -97,20 +419,195 @@ export default function AdminTournamentDetailPage() {
         >
           ← Torneos
         </Link>
-        <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
+
+        {generalDraft ? (
+          <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+                Datos del torneo
+              </h2>
+              <label className="text-sm">
+                <span className="mr-2 font-medium text-zinc-600 dark:text-zinc-400">
+                  Estado
+                </span>
+                <select
+                  value={generalDraft.status}
+                  onChange={(e) =>
+                    setGeneralDraft((d) =>
+                      d
+                        ? {
+                            ...d,
+                            status: e.target.value as TournamentMock["status"],
+                          }
+                        : d,
+                    )
+                  }
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                >
+                  <option value="open">Abierto</option>
+                  <option value="closed">Cerrado</option>
+                  <option value="draft">Borrador</option>
+                </select>
+              </label>
+            </div>
+            <p className="mt-1 font-mono text-xs text-zinc-500">
+              slug (solo lectura): {tournament.slug}
+            </p>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              <label className="block text-sm lg:col-span-2">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Nombre
+                </span>
+                <input
+                  type="text"
+                  value={generalDraft.name}
+                  onChange={(e) =>
+                    setGeneralDraft((d) =>
+                      d ? { ...d, name: e.target.value } : d,
+                    )
+                  }
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Inicio del torneo
+                </span>
+                <input
+                  type="date"
+                  value={generalDraft.tournamentStartsOn}
+                  onChange={(e) =>
+                    setGeneralDraft((d) =>
+                      d ? { ...d, tournamentStartsOn: e.target.value } : d,
+                    )
+                  }
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Fin del torneo
+                </span>
+                <input
+                  type="date"
+                  value={generalDraft.tournamentEndsOn}
+                  onChange={(e) =>
+                    setGeneralDraft((d) =>
+                      d ? { ...d, tournamentEndsOn: e.target.value } : d,
+                    )
+                  }
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Límite inscripciones
+                </span>
+                <input
+                  type="date"
+                  value={generalDraft.registrationDeadlineOn}
+                  onChange={(e) =>
+                    setGeneralDraft((d) =>
+                      d
+                        ? { ...d, registrationDeadlineOn: e.target.value }
+                        : d,
+                    )
+                  }
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Ubicación
+                </span>
+                <input
+                  type="text"
+                  value={generalDraft.locationLabel}
+                  onChange={(e) =>
+                    setGeneralDraft((d) =>
+                      d ? { ...d, locationLabel: e.target.value } : d,
+                    )
+                  }
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+              <label className="block text-sm lg:col-span-2">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Descripción
+                </span>
+                <textarea
+                  rows={3}
+                  value={generalDraft.description}
+                  onChange={(e) =>
+                    setGeneralDraft((d) =>
+                      d ? { ...d, description: e.target.value } : d,
+                    )
+                  }
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Tarifa base inscripción (USD, vacío = sin tarifa base)
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={generalDraft.registrationFeeInput}
+                  onChange={(e) =>
+                    setGeneralDraft((d) =>
+                      d ? { ...d, registrationFeeInput: e.target.value } : d,
+                    )
+                  }
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Entrada público (USD)
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={generalDraft.publicEntryFeeInput}
+                  onChange={(e) =>
+                    setGeneralDraft((d) =>
+                      d ? { ...d, publicEntryFeeInput: e.target.value } : d,
+                    )
+                  }
+                  className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </label>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSaveGeneral}
+                className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+              >
+                Guardar datos del torneo
+              </button>
+              {generalSaved ? (
+                <span className="text-sm text-emerald-600 dark:text-emerald-400">
+                  Guardado.
+                </span>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
               {tournament.name}
             </h2>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              Torneo: {tournament.tournamentStartsOn} — {tournament.tournamentEndsOn} ·{" "}
-              {tournament.locationLabel}
+              Torneo: {tournament.tournamentStartsOn} — {tournament.tournamentEndsOn}{" "}
+              · {tournament.locationLabel}
             </p>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               Límite inscripciones: {tournament.registrationDeadlineOn}
-            </p>
-            <p className="mt-1 font-mono text-xs text-zinc-500">
-              slug: {tournament.slug}
             </p>
           </div>
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
@@ -163,12 +660,19 @@ export default function AdminTournamentDetailPage() {
         <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
           Categorías
         </h3>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          Hacé clic en una categoría para ver y editar solo sus inscripciones.
+        </p>
         <ul className="mt-4 divide-y divide-zinc-200 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
           {tournament.categories.map((c) => {
             const eff = effectiveCategoryFeeCents(c, tournament);
             return (
-              <li key={c.id} className="px-4 py-4 text-sm">
-                <div className="flex flex-wrap items-start justify-between gap-2">
+              <li key={c.id} className="px-0">
+                <button
+                  type="button"
+                  onClick={() => setCategoryQuery(c.id)}
+                  className="flex w-full flex-wrap items-start justify-between gap-2 px-4 py-4 text-left text-sm transition hover:bg-zinc-50 dark:hover:bg-zinc-800/80"
+                >
                   <span className="font-semibold text-zinc-900 dark:text-zinc-100">
                     {c.label}
                   </span>
@@ -176,23 +680,23 @@ export default function AdminTournamentDetailPage() {
                     {eff != null ? formatMoney(eff) : "—"}
                     {c.maxTeams != null ? ` · máx. ${c.maxTeams} equipos` : ""}
                   </span>
-                </div>
-                {c.subdivisions.length > 0 ? (
-                  <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
-                    Divisiones:{" "}
-                    {c.subdivisions
-                      .map((s) =>
-                        s.maxTeams != null
-                          ? `${s.label} (máx. ${s.maxTeams} equipos)`
-                          : s.label,
-                      )
-                      .join(", ")}
-                  </p>
-                ) : (
-                  <p className="mt-2 text-xs text-zinc-500">
-                    Sin subdivisión interna.
-                  </p>
-                )}
+                  {c.subdivisions.length > 0 ? (
+                    <span className="w-full text-xs text-zinc-600 dark:text-zinc-400">
+                      Divisiones:{" "}
+                      {c.subdivisions
+                        .map((s) =>
+                          s.maxTeams != null
+                            ? `${s.label} (máx. ${s.maxTeams} equipos)`
+                            : s.label,
+                        )
+                        .join(", ")}
+                    </span>
+                  ) : (
+                    <span className="w-full text-xs text-zinc-500">
+                      Sin subdivisión interna. Clic para inscripciones →
+                    </span>
+                  )}
+                </button>
               </li>
             );
           })}
@@ -209,7 +713,7 @@ export default function AdminTournamentDetailPage() {
           Inscripciones
         </h3>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Filtradas a este torneo (datos mock hasta conectar Supabase).
+          Todas las categorías de este torneo (datos mock + localStorage).
         </p>
         <div className="mt-6">
           <MergedRegistrationsTable
@@ -219,5 +723,21 @@ export default function AdminTournamentDetailPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function AdminTournamentDetailPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex flex-1 flex-col gap-4">
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Cargando…
+          </p>
+        </main>
+      }
+    >
+      <AdminTournamentDetailInner />
+    </Suspense>
   );
 }

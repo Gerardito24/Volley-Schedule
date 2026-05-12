@@ -11,9 +11,12 @@ import { registrationRows as seedRegistrationRows } from "@/lib/mock-data";
 
 export function MergedRegistrationsTable({
   tournamentSlug,
+  categoryId,
   hideTournamentColumn,
 }: {
   tournamentSlug?: string;
+  /** Si se pasa, solo filas de esa categoría (`categoryId` en mock). */
+  categoryId?: string;
   hideTournamentColumn?: boolean;
 }) {
   const [revision, setRevision] = useState(0);
@@ -39,8 +42,11 @@ export function MergedRegistrationsTable({
     if (tournamentSlug) {
       merged = merged.filter((r) => r.tournamentSlug === tournamentSlug);
     }
+    if (categoryId) {
+      merged = merged.filter((r) => r.categoryId === categoryId);
+    }
     return merged;
-  }, [tournamentSlug, revision]);
+  }, [tournamentSlug, categoryId, revision]);
 
   return (
     <RegistrationTable
