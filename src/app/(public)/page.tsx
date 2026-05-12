@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { tournaments as seedTournaments, formatTournamentLocationsLine } from "@/lib/mock-data";
+import {
+  tournaments as seedTournaments,
+  formatTournamentLocationsLine,
+} from "@/lib/mock-data";
 import type { TournamentMock } from "@/lib/mock-data";
 import { mergeAdminTournaments } from "@/lib/merge-tournaments";
 import { readStoredTournaments } from "@/lib/local-tournaments";
@@ -15,38 +18,71 @@ import {
 
 function formatDateRange(start: string, end: string): string {
   if (start === end) return start;
-  return `${start} — ${end}`;
+  return `${start} – ${end}`;
 }
 
-/* ─── sub-components ─── */
+/* ─── Volleyball placeholder SVG ─── */
+function VolleyballPlaceholder() {
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-50 to-zinc-100 dark:from-emerald-950/30 dark:to-zinc-900">
+      <svg
+        viewBox="0 0 64 64"
+        className="h-16 w-16 text-emerald-300 dark:text-emerald-700"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        aria-hidden="true"
+      >
+        <circle cx="32" cy="32" r="26" />
+        {/* vertical seam */}
+        <path d="M32 6 C32 6 20 18 20 32 C20 46 32 58 32 58" />
+        <path d="M32 6 C32 6 44 18 44 32 C44 46 32 58 32 58" />
+        {/* horizontal seam */}
+        <path d="M6 32 C6 32 18 20 32 20 C46 20 58 32 58 32" />
+        <path d="M6 32 C6 32 18 44 32 44 C46 44 58 32 58 32" />
+      </svg>
+    </div>
+  );
+}
 
+/* ─── Active tournament banner ─── */
 function ActiveBanner({ tournament }: { tournament: TournamentMock }) {
   return (
-    <section className="relative overflow-hidden rounded-2xl bg-emerald-700 text-white shadow-lg">
+    <section className="relative overflow-hidden rounded-2xl bg-zinc-900 text-white shadow-xl">
+      {/* Promo image with gradient overlay */}
       {tournament.promoImageDataUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={tournament.promoImageDataUrl}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover opacity-20"
-        />
-      ) : null}
-      <div className="relative flex flex-col gap-4 p-6 sm:p-10 md:flex-row md:items-center md:justify-between">
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={tournament.promoImageDataUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover opacity-40"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/90 via-zinc-900/40 to-transparent" />
+        </>
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-900 to-zinc-900 opacity-90" />
+      )}
+
+      <div className="relative flex flex-col gap-5 px-6 py-8 sm:px-10 sm:py-10 md:flex-row md:items-end md:justify-between">
         <div>
-          <span className="inline-block rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-            Torneo en curso
+          {/* Live pill */}
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-emerald-300 ring-1 ring-emerald-400/20">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            En curso
           </span>
-          <h2 className="mt-3 text-2xl font-bold leading-tight sm:text-3xl">
+          <h2 className="mt-3 text-2xl font-bold leading-tight tracking-tight sm:text-3xl md:text-4xl">
             {tournament.name}
           </h2>
-          <p className="mt-1.5 text-emerald-100">
-            {formatDateRange(tournament.tournamentStartsOn, tournament.tournamentEndsOn)} ·{" "}
+          <p className="mt-2 text-sm text-zinc-300">
+            {formatDateRange(tournament.tournamentStartsOn, tournament.tournamentEndsOn)}
+            {" · "}
             {formatTournamentLocationsLine(tournament)}
           </p>
         </div>
         <Link
           href={`/tournaments/${tournament.slug}#itinerario`}
-          className="shrink-0 self-start rounded-full bg-white px-7 py-3 text-sm font-bold text-emerald-800 shadow hover:bg-emerald-50 md:self-auto"
+          className="shrink-0 self-start rounded-full bg-white px-8 py-3 text-sm font-bold text-zinc-900 shadow-lg transition hover:bg-emerald-50 md:self-auto"
         >
           Ver itinerario →
         </Link>
@@ -55,35 +91,33 @@ function ActiveBanner({ tournament }: { tournament: TournamentMock }) {
   );
 }
 
+/* ─── Tournament card ─── */
 function TournamentCard({ t }: { t: TournamentMock }) {
   const open = t.status === "open";
-  const hasBg = Boolean(t.promoImageDataUrl);
 
   return (
-    <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
+    <article className="group flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm ring-transparent transition duration-200 hover:shadow-md hover:ring-2 hover:ring-emerald-400/50 dark:border-zinc-800 dark:bg-zinc-900">
       {/* Image / placeholder */}
-      <div className="relative h-44 overflow-hidden bg-zinc-100 dark:bg-zinc-800">
-        {hasBg ? (
+      <div className="relative h-52 overflow-hidden">
+        {t.promoImageDataUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={t.promoImageDataUrl!}
+            src={t.promoImageDataUrl}
             alt=""
-            className="h-full w-full object-cover transition group-hover:scale-105"
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-4xl text-zinc-300 dark:text-zinc-600 select-none">
-            🏐
-          </div>
+          <VolleyballPlaceholder />
         )}
         {/* Status badge */}
         <span
           className={[
-            "absolute right-3 top-3 rounded-full px-2.5 py-0.5 text-xs font-semibold",
+            "absolute left-3 top-3 rounded-full px-2.5 py-0.5 text-xs font-semibold backdrop-blur-sm",
             open
-              ? "bg-emerald-100 text-emerald-800"
+              ? "bg-emerald-100/90 text-emerald-800"
               : t.status === "closed"
-                ? "bg-red-100 text-red-800"
-                : "bg-zinc-200 text-zinc-600",
+                ? "bg-red-100/90 text-red-800"
+                : "bg-zinc-200/90 text-zinc-600",
           ].join(" ")}
         >
           {open ? "Inscripciones abiertas" : t.status === "closed" ? "Cerrado" : "Borrador"}
@@ -91,32 +125,33 @@ function TournamentCard({ t }: { t: TournamentMock }) {
       </div>
 
       {/* Body */}
-      <div className="flex flex-1 flex-col gap-3 p-5">
-        <div>
-          <h3 className="font-bold text-zinc-900 leading-snug dark:text-zinc-50">{t.name}</h3>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {formatDateRange(t.tournamentStartsOn, t.tournamentEndsOn)} ·{" "}
-            {formatTournamentLocationsLine(t)}
-          </p>
-        </div>
+      <div className="flex flex-1 flex-col gap-2 p-5">
+        <h3 className="text-base font-bold leading-snug text-zinc-900 dark:text-zinc-50">
+          {t.name}
+        </h3>
+        <p className="text-xs text-zinc-400 dark:text-zinc-500">
+          {formatDateRange(t.tournamentStartsOn, t.tournamentEndsOn)}
+          {" · "}
+          {formatTournamentLocationsLine(t)}
+        </p>
         {t.description ? (
-          <p className="line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="line-clamp-2 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
             {t.description}
           </p>
         ) : null}
 
-        <div className="mt-auto pt-2">
+        <div className="mt-auto pt-3">
           {open ? (
             <Link
               href={`/tournaments/${t.slug}/register`}
-              className="inline-flex w-full items-center justify-center rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+              className="flex w-full items-center justify-center rounded-full bg-emerald-600 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 active:scale-95"
             >
               Inscribirse
             </Link>
           ) : (
             <Link
               href={`/tournaments/${t.slug}`}
-              className="inline-flex w-full items-center justify-center rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              className="flex w-full items-center justify-center rounded-full border border-zinc-300 py-2.5 text-sm font-semibold text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-800 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-200"
             >
               Ver torneo
             </Link>
@@ -127,8 +162,7 @@ function TournamentCard({ t }: { t: TournamentMock }) {
   );
 }
 
-/* ─── page ─── */
-
+/* ─── Page ─── */
 export default function PublicHomePage() {
   const [all, setAll] = useState<TournamentMock[]>([]);
 
@@ -148,7 +182,6 @@ export default function PublicHomePage() {
       [...all]
         .filter((t) => t.status !== "draft")
         .sort((a, b) => {
-          // Open first, then by start date desc
           if (a.status === "open" && b.status !== "open") return -1;
           if (b.status === "open" && a.status !== "open") return 1;
           return b.tournamentStartsOn.localeCompare(a.tournamentStartsOn);
@@ -160,55 +193,31 @@ export default function PublicHomePage() {
 
   return (
     <main className="flex w-full flex-1 flex-col gap-10 py-10">
-
-      {/* Active tournament banner */}
+      {/* Active tournament banner — only shown when there is a live tournament with published schedule */}
       {featured ? (
         <div className="space-y-2">
           <ActiveBanner tournament={featured} />
           {activeTournaments.length > 1 ? (
-            <p className="text-right text-sm text-zinc-500">
+            <p className="text-right text-xs text-zinc-500">
               {activeTournaments.length - 1} torneo(s) más en curso —{" "}
-              <Link href="/itinerarios" className="text-emerald-700 hover:underline dark:text-emerald-400">
+              <Link
+                href="/itinerarios"
+                className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+              >
                 Ver itinerarios
               </Link>
             </p>
           ) : null}
         </div>
-      ) : (
-        /* Hero copy when no live tournament */
-        <section className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 md:p-12">
-          <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-            Torneos de voleibol — Puerto Rico
-          </p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 md:text-4xl">
-            Inscripciones, itinerarios y más
-          </h1>
-          <p className="mt-4 max-w-2xl text-lg leading-relaxed text-zinc-600 dark:text-zinc-300">
-            Un solo lugar para inscribir tu equipo, seguir el itinerario y mantenerte al día con
-            todos los torneos.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-4">
-            <Link
-              href="/tournaments"
-              className="rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-700"
-            >
-              Ver torneos abiertos
-            </Link>
-            <Link
-              href="/itinerarios"
-              className="rounded-full border border-zinc-300 px-6 py-3 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-800"
-            >
-              Itinerarios publicados
-            </Link>
-          </div>
-        </section>
-      )}
+      ) : null}
 
-      {/* Tournament cards */}
+      {/* Tournament cards grid */}
       {cards.length > 0 ? (
         <section className="space-y-5">
           <div className="flex items-baseline justify-between">
-            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Torneos</h2>
+            <h2 className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+              Torneos
+            </h2>
             <Link
               href="/tournaments"
               className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
@@ -222,7 +231,13 @@ export default function PublicHomePage() {
             ))}
           </div>
         </section>
-      ) : null}
+      ) : (
+        !featured && (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            No hay torneos disponibles en este momento.
+          </p>
+        )
+      )}
     </main>
   );
 }
