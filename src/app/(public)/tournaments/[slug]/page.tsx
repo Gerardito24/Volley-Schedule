@@ -120,7 +120,9 @@ export default async function TournamentDetailPage(props: Props) {
         </ul>
       </section>
 
-      <PublicTournamentSchedule slug={slug} />
+      <section id="itinerario" className="scroll-mt-20">
+        <PublicTournamentSchedule slug={slug} />
+      </section>
 
       <div>
         {open ? (
