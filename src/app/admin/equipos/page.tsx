@@ -59,6 +59,20 @@ function buildClubSummaries(): ClubSummary[] {
     }
   }
 
+  // Perfiles creados desde /equipo (público) sin inscripción aún
+  for (const p of profiles) {
+    if (!map.has(p.clubSlug)) {
+      map.set(p.clubSlug, {
+        clubName: p.displayName.trim() || p.clubSlug,
+        clubSlug: p.clubSlug,
+        teamCount: 0,
+        registrationIds: [],
+        pueblo: p.pueblo ?? "",
+        owner: p.contactName ?? "",
+      });
+    }
+  }
+
   return [...map.values()]
     .map((c) => {
       const prof = profiles.find((p) => p.clubSlug === c.clubSlug);
@@ -107,23 +121,24 @@ export default function AdminEquiposPage() {
           Equipos
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Clubes organizados por inscripciones. Al registrar un equipo se crea
-          automáticamente un roster por categoría.
+          Incluye perfiles registrados desde la web pública (Equipo) aunque aún no haya inscripción a un torneo,
+          más clubes que aparecen por inscripciones y rosters.
         </p>
       </div>
 
       {clubs.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-12 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Todavía no hay clubes. Cuando un equipo se inscriba en un torneo
-            aparecerá aquí.
+            Todavía no hay clubes. Pueden crearse desde la página pública{" "}
+            <Link href="/equipo" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+              Equipo
+            </Link>{" "}
+            o al inscribirse en un{" "}
+            <Link href="/tournaments" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+              torneo
+            </Link>
+            .
           </p>
-          <Link
-            href="/tournaments"
-            className="mt-4 inline-block text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
-          >
-            Ver torneos →
-          </Link>
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
@@ -161,7 +176,13 @@ export default function AdminEquiposPage() {
                     {c.owner || ""}
                   </td>
                   <td className="px-5 py-4 text-zinc-600 dark:text-zinc-400">
-                    {c.teamCount} {c.teamCount === 1 ? "equipo" : "equipos"}
+                    {c.teamCount === 0 ? (
+                      <span className="text-zinc-500">Solo perfil (0 inscripciones)</span>
+                    ) : (
+                      <>
+                        {c.teamCount} {c.teamCount === 1 ? "equipo" : "equipos"}
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

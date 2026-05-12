@@ -63,6 +63,16 @@ function loadRostersForSlug(clubSlug: string): {
     }
   }
 
+  if (result.length === 0) {
+    const prof = getClubProfile(clubSlug);
+    if (prof) {
+      return {
+        rosters: [],
+        defaultName: prof.displayName?.trim() || defaultName,
+      };
+    }
+  }
+
   return {
     defaultName,
     rosters: result.sort((a, b) =>
@@ -201,7 +211,7 @@ function ClubDetailInner() {
 
   // ── not found ─────────────────────────────────────────────────────────────
 
-  if (rosters.length === 0) {
+  if (rosters.length === 0 && !getClubProfile(clubSlug)) {
     return (
       <main className="flex flex-1 flex-col gap-4">
         <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Club no encontrado</h2>
@@ -331,10 +341,18 @@ function ClubDetailInner() {
             Equipos ({rosters.length})
           </h2>
           <p className="text-xs text-zinc-400">
-            Haz clic en un equipo para ver o editar su roster.
+            {rosters.length > 0
+              ? "Haz clic en un equipo para ver o editar su roster."
+              : "Cuando este club se inscriba en un torneo, los equipos aparecerán aquí."}
           </p>
         </div>
 
+        {rosters.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-5 py-10 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-400">
+            Sin inscripciones aún. El perfil del club arriba ya está en el sistema.
+          </div>
+        ) : (
+        <>
         <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
           <table className="min-w-full text-sm">
             <thead className="bg-zinc-50 dark:bg-zinc-900/50">
@@ -412,6 +430,8 @@ function ClubDetailInner() {
             <span className="text-sm text-emerald-600 dark:text-emerald-400">Guardado.</span>
           ) : null}
         </div>
+        </>
+        )}
       </section>
     </main>
   );

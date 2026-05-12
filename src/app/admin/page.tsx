@@ -13,6 +13,12 @@ const modules = [
     description: "Vista global de todas las inscripciones y export CSV.",
     badge: null,
   },
+  {
+    href: "/admin/profiles",
+    title: "Perfiles",
+    description: "Operadores: IT maestro y administradores con acceso al panel.",
+    badge: null,
+  },
 ];
 
 export default function AdminHomePage() {
@@ -21,7 +27,8 @@ export default function AdminHomePage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">Inicio</h1>
         <p className="mt-1 text-sm text-zinc-600">
-          Selecciona el módulo que deseas utilizar.
+          Selecciona el módulo que deseas utilizar. El acceso al panel requiere perfil IT configurado e inicio de
+          sesión.
         </p>
       </div>
 
