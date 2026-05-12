@@ -16,10 +16,18 @@ import {
   displayCategoryName,
   formatRegistrationDivisionLabel,
 } from "@/lib/mock-data";
-import { appendStoredRegistration } from "@/lib/local-registrations";
+import { appendStoredRegistration, readStoredRegistrations } from "@/lib/local-registrations";
+import { readClubProfiles } from "@/lib/local-club-profiles";
 import { createStubRosterFromRegistration } from "@/lib/local-team-rosters";
 import { downloadRegistrationPdf } from "@/lib/registrationPdf";
 import { effectiveCategoryFeeCents } from "@/lib/tournament-pricing";
+import {
+  filterRegistrationsForReuse,
+  filterClubProfilesForReuse,
+  applyRegistrationToFormDraft,
+  applyClubProfileToFormDraft,
+} from "@/lib/registration-reuse";
+import type { ClubProfile } from "@/lib/club-profile-types";
 
 export type RegisterTournamentPayload = Pick<
   TournamentMock,
@@ -504,6 +512,21 @@ export function TournamentRegisterForm({
   const [done, setDone] = useState(false);
   const [lastCreated, setLastCreated] = useState<RegistrationRowMock | null>(null);
 
+  // Reuse panel state
+  const [reuseOpen, setReuseOpen] = useState(false);
+  const [reuseTab, setReuseTab] = useState<"registrations" | "profiles">("registrations");
+  const [reuseQuery, setReuseQuery] = useState("");
+  const [reuseMsg, setReuseMsg] = useState<string | null>(null);
+  const [allRegistrations, setAllRegistrations] = useState<RegistrationRowMock[]>([]);
+  const [allProfiles, setAllProfiles] = useState<ClubProfile[]>([]);
+
+  // Load reuse sources when entering step 2
+  useEffect(() => {
+    if (step !== 2) return;
+    setAllRegistrations(readStoredRegistrations());
+    setAllProfiles(readClubProfiles());
+  }, [step]);
+
   const category = useMemo(
     () => tournament.categories.find((c) => c.id === categoryId),
     [tournament.categories, categoryId],
@@ -541,6 +564,39 @@ export function TournamentRegisterForm({
 
   function toggleTerm(i: number) {
     setTerms((prev) => prev.map((v, idx) => (idx === i ? !v : v)));
+  }
+
+  function applyReuseDraft(row: RegistrationRowMock) {
+    const d = applyRegistrationToFormDraft(row);
+    setTeamName(d.teamName);
+    setClubName(d.clubName);
+    setClubAffiliationNumber(d.clubAffiliationNumber);
+    setRepName(d.repName);
+    setRepEmail(d.repEmail);
+    setRepPhone(d.repPhone);
+    setCoach(d.coach);
+    setHasAssistant(d.hasAssistant);
+    setAssistant(d.assistant ?? emptyCoach());
+    setPlayers(d.players.length > 0 ? d.players : Array.from({ length: 6 }, emptyPlayer));
+    setComments(d.comments);
+    // Reset fields that must be fresh per torneo
+    setTerms([false, false, false]);
+    setSignatureDataUrl(null);
+    setReuseOpen(false);
+    setReuseMsg("Datos cargados. Elige la categoría de este torneo y completa la firma.");
+  }
+
+  function applyReuseProfile(profile: ClubProfile) {
+    const d = applyClubProfileToFormDraft(profile);
+    setClubName(d.clubName);
+    setRepName(d.repName);
+    setRepEmail(d.repEmail);
+    setRepPhone(d.repPhone);
+    // Reset firma/términos but leave roster/coach intact
+    setTerms([false, false, false]);
+    setSignatureDataUrl(null);
+    setReuseOpen(false);
+    setReuseMsg("Perfil cargado. Completa afiliación, coach, jugadores y firma.");
   }
 
   const handleSubmit = useCallback(
@@ -733,6 +789,171 @@ export function TournamentRegisterForm({
           {error}
         </div>
       ) : null}
+
+      {/* Reuse success message */}
+      {reuseMsg ? (
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+          <span>{reuseMsg}</span>
+          <button type="button" onClick={() => setReuseMsg(null)} className="shrink-0 text-emerald-600 hover:text-emerald-900 dark:text-emerald-400">✕</button>
+        </div>
+      ) : null}
+
+      {/* ── Reuse panel ── */}
+      {(() => {
+        const filteredRegs = filterRegistrationsForReuse(allRegistrations, tournament.slug, reuseQuery);
+        const filteredProfiles = filterClubProfilesForReuse(allProfiles, reuseQuery);
+        return (
+          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/50">
+            {/* Collapsible header */}
+            <button
+              type="button"
+              onClick={() => setReuseOpen((o) => !o)}
+              className="flex w-full items-center justify-between px-5 py-4 text-left"
+            >
+              <div className="flex items-center gap-2">
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-emerald-600 dark:text-emerald-400">
+                  <path d="M10 3a1 1 0 0 1 1 1v5h5a1 1 0 1 1 0 2h-5v5a1 1 0 1 1-2 0v-5H4a1 1 0 1 1 0-2h5V4a1 1 0 0 1 1-1Z" />
+                </svg>
+                <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                  Reutilizar datos guardados
+                </span>
+                {(allRegistrations.length > 0 || allProfiles.length > 0) ? (
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
+                    {allRegistrations.filter(r => r.tournamentSlug !== tournament.slug).length + allProfiles.length} guardados
+                  </span>
+                ) : null}
+              </div>
+              <svg
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className={`h-4 w-4 text-zinc-400 transition-transform ${reuseOpen ? "rotate-180" : ""}`}
+              >
+                <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+              </svg>
+            </button>
+
+            {reuseOpen ? (
+              <div className="border-t border-zinc-200 px-5 pb-5 pt-4 space-y-4 dark:border-zinc-700">
+                {/* Tabs */}
+                <div className="flex gap-1 rounded-lg border border-zinc-200 bg-white p-1 w-fit dark:border-zinc-700 dark:bg-zinc-950">
+                  {(["registrations", "profiles"] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => { setReuseTab(tab); setReuseQuery(""); }}
+                      className={[
+                        "rounded-md px-4 py-1.5 text-xs font-semibold transition",
+                        reuseTab === tab
+                          ? "bg-zinc-800 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                          : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200",
+                      ].join(" ")}
+                    >
+                      {tab === "registrations" ? `Inscripciones anteriores (${allRegistrations.filter(r => r.tournamentSlug !== tournament.slug).length})` : `Perfiles Equipo (${allProfiles.length})`}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search */}
+                <input
+                  type="text"
+                  placeholder={reuseTab === "registrations" ? "Buscar por equipo, club, categoría, coach…" : "Buscar por nombre del club o contacto…"}
+                  value={reuseQuery}
+                  onChange={(e) => setReuseQuery(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+
+                {/* Results */}
+                {reuseTab === "registrations" ? (
+                  filteredRegs.length === 0 ? (
+                    <p className="text-sm text-zinc-400 py-2">
+                      {allRegistrations.filter(r => r.tournamentSlug !== tournament.slug).length === 0
+                        ? "No hay inscripciones previas en este dispositivo."
+                        : "No se encontraron inscripciones con esa búsqueda."}
+                    </p>
+                  ) : (
+                    <ul className="max-h-72 overflow-y-auto space-y-2">
+                      {filteredRegs.map((row) => (
+                        <li key={row.id} className="flex items-start justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                              {row.teamName || row.clubName}
+                            </p>
+                            <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+                              {row.tournamentName} · {row.divisionLabel}
+                            </p>
+                            {row.coach?.name ? (
+                              <p className="text-xs text-zinc-400">Coach: {row.coach.name}</p>
+                            ) : null}
+                            <p className="text-xs text-zinc-400">{row.registeredAt.slice(0, 10)}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => applyReuseDraft(row)}
+                            className="shrink-0 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                          >
+                            Usar
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )
+                ) : (
+                  filteredProfiles.length === 0 ? (
+                    <div className="space-y-2 py-2">
+                      <p className="text-sm text-zinc-400">
+                        {allProfiles.length === 0
+                          ? "No hay perfiles de equipo guardados en este dispositivo."
+                          : "No se encontraron perfiles con esa búsqueda."}
+                      </p>
+                      <a
+                        href="/equipo"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                      >
+                        Crear perfil en Equipo →
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <ul className="max-h-72 overflow-y-auto space-y-2">
+                        {filteredProfiles.map((p) => (
+                          <li key={p.clubSlug} className="flex items-start justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                                {p.displayName}
+                              </p>
+                              <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+                                {p.contactName}{p.pueblo ? ` · ${p.pueblo}` : ""}
+                              </p>
+                              <p className="text-xs text-zinc-400">{p.contactEmail}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => applyReuseProfile(p)}
+                              className="shrink-0 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                            >
+                              Usar
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      <a
+                        href="/equipo"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                      >
+                        Editar perfiles en Equipo →
+                      </a>
+                    </div>
+                  )
+                )}
+              </div>
+            ) : null}
+          </div>
+        );
+      })()}
 
       {/* ── A: Información del Equipo ── */}
       <section className="space-y-5">
