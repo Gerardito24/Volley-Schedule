@@ -15,15 +15,17 @@ import {
 } from "@/lib/local-registrations";
 import { mergeAdminTournaments } from "@/lib/merge-tournaments";
 import { mergeAdminRegistrations } from "@/lib/merge-registrations";
-import type { CategoryMock, TournamentMock, TournamentVenue } from "@/lib/mock-data";
+import type { CategoryGender, CategoryMock, TournamentMock, TournamentVenue } from "@/lib/mock-data";
 import {
   registrationRows as seedRegistrationRows,
   tournaments as seedTournaments,
   buildDefaultCategoryLabel,
+  categoryGenderLabel,
   displayCategoryName,
   formatRegistrationDivisionLabel,
   formatTournamentLocationsLine,
   normalizeTournament,
+  parseCategoryGender,
 } from "@/lib/mock-data";
 import { effectiveCategoryFeeCents } from "@/lib/tournament-pricing";
 
@@ -106,6 +108,7 @@ function categoryToDraft(c: CategoryMock) {
     label: c.label,
     ageLabel: c.ageLabel,
     divisionId: c.divisionId,
+    gender: parseCategoryGender(c.gender),
     categoryTitleManual: c.categoryTitleManual ?? false,
     feeInput: centsToInput(c.feeCents),
     maxTeamsInput: c.maxTeams != null ? String(c.maxTeams) : "",
@@ -151,6 +154,7 @@ function AdminTournamentDetailInner() {
     label: string;
     ageLabel: string;
     divisionId: string;
+    gender: CategoryGender;
     categoryTitleManual: boolean;
     feeInput: string;
     maxTeamsInput: string;
@@ -228,9 +232,10 @@ function AdminTournamentDetailInner() {
     const firstDivId = nt.divisions[0]?.id ?? "div-general";
     const newCat: CategoryMock = {
       id: `admin-cat-${crypto.randomUUID()}`,
-      label: buildDefaultCategoryLabel("", firstDivId, nt.divisions),
+      label: buildDefaultCategoryLabel("", firstDivId, nt.divisions, "mixto"),
       ageLabel: "",
       divisionId: firstDivId,
+      gender: "mixto",
       categoryTitleManual: false,
       feeCents: nt.registrationFeeCents,
       maxTeams: null,
@@ -326,7 +331,12 @@ function AdminTournamentDetailInner() {
         ? categoryDraft.divisionId
         : (tournament.divisions[0]?.id ?? selectedCategory.divisionId);
 
-    const autoLabel = buildDefaultCategoryLabel(ageLabel, divisionId, tournament.divisions);
+    const autoLabel = buildDefaultCategoryLabel(
+      ageLabel,
+      divisionId,
+      tournament.divisions,
+      categoryDraft.gender,
+    );
     const finalLabel =
       categoryDraft.categoryTitleManual && categoryDraft.label.trim()
         ? categoryDraft.label.trim()
@@ -337,6 +347,7 @@ function AdminTournamentDetailInner() {
       label: finalLabel,
       ageLabel,
       divisionId,
+      gender: categoryDraft.gender,
       categoryTitleManual: categoryDraft.categoryTitleManual,
       feeCents: nextFeeCents,
       maxTeams: nextMax,
@@ -462,6 +473,7 @@ function AdminTournamentDetailInner() {
                     categoryDraft.ageLabel,
                     categoryDraft.divisionId,
                     tournament.divisions,
+                    categoryDraft.gender,
                   );
                   const draft = categoryTitleDraft.trim();
                   if (!draft || draft === auto) {
@@ -487,7 +499,7 @@ function AdminTournamentDetailInner() {
             ) : (
               <button
                 type="button"
-                title="Doble clic para editar el nombre (no cambia edad ni división)"
+                title="Doble clic para editar el nombre (no cambia edad, división ni género)"
                 onDoubleClick={() => {
                   setCategoryTitleDraft(
                     displayCategoryName(selectedCategory, tournament.divisions),
@@ -500,11 +512,11 @@ function AdminTournamentDetailInner() {
               </button>
             )}
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Nombre = edad + división. Doble clic para un título distinto. Guardá abajo.
+              Nombre = edad + división + género. Doble clic para un título distinto. Guardá abajo.
             </p>
           </div>
           <p className="mb-6 text-xs text-zinc-500">
-            Edad, división del torneo, tarifa y cupo. Los cambios se guardan en este navegador
+            Edad, división del torneo, género, tarifa y cupo. Los cambios se guardan en este navegador
             (localStorage).
           </p>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -525,6 +537,7 @@ function AdminTournamentDetailInner() {
                         v,
                         d.divisionId,
                         tournament.divisions,
+                        d.gender,
                       );
                     }
                     return next;
@@ -550,6 +563,7 @@ function AdminTournamentDetailInner() {
                         d.ageLabel,
                         v,
                         tournament.divisions,
+                        d.gender,
                       );
                     }
                     return next;
@@ -562,6 +576,35 @@ function AdminTournamentDetailInner() {
                     {d.label}
                   </option>
                 ))}
+              </select>
+            </label>
+            <label className="block text-sm sm:col-span-2 sm:max-w-md">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                Género
+              </span>
+              <select
+                value={categoryDraft.gender}
+                onChange={(e) => {
+                  const v = e.target.value as CategoryGender;
+                  setCategoryDraft((d) => {
+                    if (!d) return d;
+                    const next = { ...d, gender: v };
+                    if (!d.categoryTitleManual) {
+                      next.label = buildDefaultCategoryLabel(
+                        d.ageLabel,
+                        d.divisionId,
+                        tournament.divisions,
+                        v,
+                      );
+                    }
+                    return next;
+                  });
+                }}
+                className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              >
+                <option value="masculino">Masculino</option>
+                <option value="femenino">Femenino</option>
+                <option value="mixto">Mixto</option>
               </select>
             </label>
             <label className="block text-sm">
@@ -855,7 +898,7 @@ function AdminTournamentDetailInner() {
                   </button>
                 </div>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  Las categorías eligen una de estas divisiones. Se guardan al pulsar Guardar datos del torneo.
+                  Las categorías eligen una de estas divisiones (grupo/nivel). El género se define por categoría. Guardá con Guardar datos del torneo.
                 </p>
                 <div className="mt-2 space-y-2">
                   {generalDraft.divisionRows.map((row) => (
@@ -1068,7 +1111,9 @@ function AdminTournamentDetailInner() {
             const div = tournament.divisions.find((d) => d.id === c.divisionId);
             const meta =
               c.categoryTitleManual && c.label.trim()
-                ? [c.ageLabel?.trim(), div?.label].filter(Boolean).join(" · ")
+                ? [c.ageLabel?.trim(), div?.label, categoryGenderLabel(c.gender)]
+                    .filter(Boolean)
+                    .join(" · ")
                 : null;
             const title = displayCategoryName(c, tournament.divisions);
             return (

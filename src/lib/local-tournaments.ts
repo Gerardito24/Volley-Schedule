@@ -209,12 +209,18 @@ function isCategoryMock(value: unknown): value is CategoryMock {
   const divIdOk = o.divisionId === undefined || typeof o.divisionId === "string";
   const titleManualOk =
     o.categoryTitleManual === undefined || typeof o.categoryTitleManual === "boolean";
+  const genderOk =
+    o.gender === undefined ||
+    o.gender === "masculino" ||
+    o.gender === "femenino" ||
+    o.gender === "mixto";
   if (
     typeof o.id !== "string" ||
     typeof o.label !== "string" ||
     !ageOk ||
     !divIdOk ||
     !titleManualOk ||
+    !genderOk ||
     !(o.feeCents === null || typeof o.feeCents === "number") ||
     !(o.maxTeams === null || typeof o.maxTeams === "number") ||
     !Array.isArray(o.subdivisions)

@@ -2,7 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { PublicTournamentSchedule } from "@/components/PublicTournamentSchedule";
-import { getTournamentBySlug, formatTournamentLocationsLine, displayCategoryName } from "@/lib/mock-data";
+import {
+  getTournamentBySlug,
+  formatTournamentLocationsLine,
+  displayCategoryName,
+  categoryGenderLabel,
+} from "@/lib/mock-data";
 import { effectiveCategoryFeeCents } from "@/lib/tournament-pricing";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -79,7 +84,9 @@ export default async function TournamentDetailPage(props: Props) {
             const div = tournament.divisions.find((d) => d.id === c.divisionId);
             const meta =
               c.categoryTitleManual && c.label.trim()
-                ? [c.ageLabel?.trim(), div?.label].filter(Boolean).join(" · ")
+                ? [c.ageLabel?.trim(), div?.label, categoryGenderLabel(c.gender)]
+                    .filter(Boolean)
+                    .join(" · ")
                 : null;
             return (
               <li key={c.id} className="px-4 py-4 text-sm">

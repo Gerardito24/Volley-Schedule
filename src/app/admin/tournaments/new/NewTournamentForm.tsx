@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { appendStoredTournament, readStoredTournaments } from "@/lib/local-tournaments";
 import { mergeAdminTournaments } from "@/lib/merge-tournaments";
-import type { CategoryMock, TournamentMock } from "@/lib/mock-data";
+import type { CategoryGender, CategoryMock, TournamentMock } from "@/lib/mock-data";
 import { buildDefaultCategoryLabel, tournaments as seedTournaments } from "@/lib/mock-data";
 import { slugify } from "@/lib/slugify";
 const PROMO_MAX_BYTES = 400 * 1024;
@@ -27,7 +27,8 @@ type CategoryFormRow = {
   key: string;
   ageLabel: string;
   divisionId: string;
-  /** Título mostrado; si `labelManual` es false, se iguala al auto desde edad+división. */
+  gender: CategoryGender;
+  /** Título mostrado; si `labelManual` es false, se iguala al auto desde edad+división+género. */
   label: string;
   labelManual: boolean;
   feeUsd: string;
@@ -87,9 +88,10 @@ export function NewTournamentForm() {
       key: crypto.randomUUID(),
       ageLabel: "",
       divisionId: initialFirstDivision.key,
+      gender: "mixto",
       label: buildDefaultCategoryLabel("", initialFirstDivision.key, [
         { id: initialFirstDivision.key, label: initialFirstDivision.label },
-      ]),
+      ], "mixto"),
       labelManual: false,
       feeUsd: "",
       maxTeams: "",
@@ -123,7 +125,7 @@ export function NewTournamentForm() {
           if (base.labelManual) return base;
           return {
             ...base,
-            label: buildDefaultCategoryLabel(base.ageLabel, divisionId, divs),
+            label: buildDefaultCategoryLabel(base.ageLabel, divisionId, divs, base.gender),
           };
         }),
       );
@@ -141,7 +143,7 @@ export function NewTournamentForm() {
             ? c
             : {
                 ...c,
-                label: buildDefaultCategoryLabel(c.ageLabel, c.divisionId, divs),
+                label: buildDefaultCategoryLabel(c.ageLabel, c.divisionId, divs, c.gender),
               },
         ),
       );
@@ -158,7 +160,8 @@ export function NewTournamentForm() {
         key: crypto.randomUUID(),
         ageLabel: "",
         divisionId: firstId,
-        label: buildDefaultCategoryLabel("", firstId, divs),
+        gender: "mixto",
+        label: buildDefaultCategoryLabel("", firstId, divs, "mixto"),
         labelManual: false,
         feeUsd: "",
         maxTeams: "",
@@ -175,7 +178,7 @@ export function NewTournamentForm() {
   function categoryDisplayTitle(row: CategoryFormRow): string {
     const divs = divisionPairs();
     if (row.labelManual && row.label.trim()) return row.label.trim();
-    return buildDefaultCategoryLabel(row.ageLabel, row.divisionId, divs);
+    return buildDefaultCategoryLabel(row.ageLabel, row.divisionId, divs, row.gender);
   }
 
   function startTitleEdit(row: CategoryFormRow) {
@@ -185,7 +188,7 @@ export function NewTournamentForm() {
 
   function commitTitleEdit(row: CategoryFormRow) {
     const divs = divisionPairs();
-    const auto = buildDefaultCategoryLabel(row.ageLabel, row.divisionId, divs);
+    const auto = buildDefaultCategoryLabel(row.ageLabel, row.divisionId, divs, row.gender);
     const draft = titleEditDraft.trim();
     if (!draft || draft === auto) {
       updateCategory(row.key, { label: auto, labelManual: false });
@@ -202,11 +205,16 @@ export function NewTournamentForm() {
         if (r.key !== key) return r;
         let next = { ...r, ...patch };
         const affectsAuto =
-          "ageLabel" in patch || "divisionId" in patch;
+          "ageLabel" in patch || "divisionId" in patch || "gender" in patch;
         if (affectsAuto && !next.labelManual) {
           next = {
             ...next,
-            label: buildDefaultCategoryLabel(next.ageLabel, next.divisionId, divs),
+            label: buildDefaultCategoryLabel(
+              next.ageLabel,
+              next.divisionId,
+              divs,
+              next.gender,
+            ),
           };
         }
         return next;
@@ -414,6 +422,7 @@ export function NewTournamentForm() {
         row.ageLabel,
         row.divisionId,
         divisionsPayload,
+        row.gender,
       );
       const finalLabel =
         row.labelManual && row.label.trim() ? row.label.trim() : autoLabel;
@@ -423,6 +432,7 @@ export function NewTournamentForm() {
         label: finalLabel,
         ageLabel: row.ageLabel.trim(),
         divisionId: row.divisionId,
+        gender: row.gender,
         categoryTitleManual: row.labelManual,
         feeCents: catFee,
         maxTeams,
@@ -660,7 +670,7 @@ export function NewTournamentForm() {
           </button>
         </div>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Definí primero las divisiones (ej. Oro, Plata, Femenino). Cada categoría elegirá una de esta lista.
+          Definí primero las divisiones (ej. Oro, Plata, Open). Cada categoría elige una de esta lista; el género es aparte.
         </p>
         <ul className="space-y-2">
           {tournamentDivisions.map((div, didx) => (
@@ -743,7 +753,7 @@ export function NewTournamentForm() {
                   ) : (
                     <button
                       type="button"
-                      title="Doble clic para editar el nombre (no cambia edad ni división)"
+                      title="Doble clic para editar el nombre (no cambia edad, división ni género)"
                       onDoubleClick={() => startTitleEdit(row)}
                       className="block w-full truncate text-left text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100"
                     >
@@ -751,7 +761,7 @@ export function NewTournamentForm() {
                     </button>
                   )}
                   <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                    Nombre = edad + división. Doble clic para un nombre distinto.
+                    Nombre = edad + división + género. Doble clic para un nombre distinto.
                   </p>
                 </div>
                 {categories.length > 1 ? (
@@ -764,7 +774,7 @@ export function NewTournamentForm() {
                   </button>
                 ) : null}
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
                   <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
                     Edad
@@ -800,6 +810,24 @@ export function NewTournamentForm() {
                         {d.label.trim() || "(sin nombre aún)"}
                       </option>
                     ))}
+                  </select>
+                </div>
+                <div className="sm:col-span-2 lg:col-span-1">
+                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    Género
+                  </label>
+                  <select
+                    value={row.gender}
+                    onChange={(e) =>
+                      updateCategory(row.key, {
+                        gender: e.target.value as CategoryGender,
+                      })
+                    }
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+                  >
+                    <option value="masculino">Masculino</option>
+                    <option value="femenino">Femenino</option>
+                    <option value="mixto">Mixto</option>
                   </select>
                 </div>
                 <div>
