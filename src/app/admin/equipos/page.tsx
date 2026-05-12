@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { readStoredRegistrations } from "@/lib/local-registrations";
 import { readStoredRosters, LOCAL_ROSTERS_KEY } from "@/lib/local-team-rosters";
+import { readClubProfiles, LOCAL_CLUB_PROFILES_KEY } from "@/lib/local-club-profiles";
 import { mergeAdminRegistrations } from "@/lib/merge-registrations";
 import { registrationRows as seedRows } from "@/lib/mock-data";
 import { slugify } from "@/lib/slugify";
@@ -19,6 +20,7 @@ type ClubSummary = {
 function buildClubSummaries(): ClubSummary[] {
   const regs = mergeAdminRegistrations(seedRows, readStoredRegistrations());
   const rosters = readStoredRosters();
+  const profiles = readClubProfiles();
 
   const map = new Map<string, ClubSummary>();
 
@@ -26,7 +28,13 @@ function buildClubSummaries(): ClubSummary[] {
     const slug = slugify(clubName);
     const key = slug;
     if (!map.has(key)) {
-      map.set(key, { clubName, clubSlug: slug, teamCount: 0, registrationIds: [] });
+      const profile = profiles.find((p) => p.clubSlug === slug);
+      map.set(key, {
+        clubName: profile?.displayName || clubName,
+        clubSlug: slug,
+        teamCount: 0,
+        registrationIds: [],
+      });
     }
     const entry = map.get(key)!;
     if (!entry.registrationIds.includes(registrationId)) {
@@ -58,13 +66,20 @@ export default function AdminEquiposPage() {
     const bump = () => setRevision((x) => x + 1);
     window.addEventListener("volleyschedule-registrations-changed", bump);
     window.addEventListener("volleyschedule-rosters-changed", bump);
+    window.addEventListener("volleyschedule-club-profiles-changed", bump);
     const onStorage = (e: StorageEvent) => {
-      if (e.key === LOCAL_REGISTRATIONS_KEY || e.key === LOCAL_ROSTERS_KEY) bump();
+      if (
+        e.key === LOCAL_REGISTRATIONS_KEY ||
+        e.key === LOCAL_ROSTERS_KEY ||
+        e.key === LOCAL_CLUB_PROFILES_KEY
+      )
+        bump();
     };
     window.addEventListener("storage", onStorage);
     return () => {
       window.removeEventListener("volleyschedule-registrations-changed", bump);
       window.removeEventListener("volleyschedule-rosters-changed", bump);
+      window.removeEventListener("volleyschedule-club-profiles-changed", bump);
       window.removeEventListener("storage", onStorage);
     };
   }, []);

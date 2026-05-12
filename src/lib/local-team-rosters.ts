@@ -14,7 +14,7 @@ export function readStoredRosters(): TeamRoster[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isTeamRoster) as TeamRoster[];
+    return (parsed.filter(isTeamRoster) as TeamRoster[]).map(normalizeTeamRoster);
   } catch {
     return [];
   }
@@ -65,6 +65,8 @@ export function createStubRosterFromRegistration(reg: {
     tournamentName: reg.tournamentName,
     categoryId: reg.categoryId,
     divisionLabel: reg.divisionLabel,
+    coachName: "",
+    coachPhone: "",
     players: [],
     createdAt: now,
     updatedAt: now,
@@ -83,6 +85,9 @@ function isRosterPlayer(v: unknown): boolean {
 function isTeamRoster(v: unknown): boolean {
   if (!v || typeof v !== "object") return false;
   const o = v as Record<string, unknown>;
+  const coachOk =
+    (o.coachName === undefined || typeof o.coachName === "string") &&
+    (o.coachPhone === undefined || typeof o.coachPhone === "string");
   return (
     typeof o.id === "string" &&
     typeof o.registrationId === "string" &&
@@ -92,7 +97,16 @@ function isTeamRoster(v: unknown): boolean {
     typeof o.tournamentName === "string" &&
     typeof o.categoryId === "string" &&
     typeof o.divisionLabel === "string" &&
+    coachOk &&
     Array.isArray(o.players) &&
     (o.players as unknown[]).every(isRosterPlayer)
   );
+}
+
+export function normalizeTeamRoster(r: TeamRoster): TeamRoster {
+  return {
+    ...r,
+    coachName: r.coachName ?? "",
+    coachPhone: r.coachPhone ?? "",
+  };
 }

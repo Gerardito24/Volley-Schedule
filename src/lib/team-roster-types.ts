@@ -15,6 +15,8 @@ export type TeamRoster = {
   tournamentName: string;
   categoryId: string;
   divisionLabel: string;
+  coachName: string;
+  coachPhone: string;
   players: RosterPlayer[];
   createdAt: string;
   updatedAt: string;
