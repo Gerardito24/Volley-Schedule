@@ -9,6 +9,30 @@ const NAV_LINKS = [
   { href: "/equipo", label: "Equipo" },
 ];
 
+const ADMIN_HREF =
+  typeof process.env.NEXT_PUBLIC_ADMIN_APP_URL === "string" &&
+  process.env.NEXT_PUBLIC_ADMIN_APP_URL.trim().length > 0
+    ? process.env.NEXT_PUBLIC_ADMIN_APP_URL.trim()
+    : "/admin";
+
+function ProfileAdminIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20v-1a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v1" />
+    </svg>
+  );
+}
+
 function VolleyballIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -33,8 +57,7 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-200/80 bg-white/95 shadow-sm backdrop-blur-md dark:border-zinc-800/80 dark:bg-zinc-950/95">
-      <div className="flex w-full flex-col items-center gap-3 px-4 py-4 sm:px-6 lg:px-8">
-
+      <div className="relative flex w-full flex-col items-center gap-3 px-4 py-4 sm:px-6 lg:px-8">
         {/* Logo — centered, large */}
         <Link
           href="/"
@@ -67,6 +90,16 @@ export function SiteHeader() {
             );
           })}
         </nav>
+
+        {/* Admin: absolute + último en el DOM para que quede por encima del logo centrado (evita solapamiento invisible) */}
+        <Link
+          href={ADMIN_HREF}
+          className="absolute right-4 top-4 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-emerald-600 dark:hover:bg-emerald-950/50 dark:hover:text-emerald-400 sm:right-6 lg:right-8"
+          aria-label="Ir a administración"
+          title="Administración"
+        >
+          <ProfileAdminIcon className="h-5 w-5" />
+        </Link>
       </div>
     </header>
   );
