@@ -17,12 +17,6 @@ type DivisionFormRow = {
   label: string;
 };
 
-type SubdivisionFormRow = {
-  key: string;
-  label: string;
-  maxTeams: string;
-};
-
 type CategoryFormRow = {
   key: string;
   ageLabel: string;
@@ -33,7 +27,6 @@ type CategoryFormRow = {
   labelManual: boolean;
   feeUsd: string;
   maxTeams: string;
-  subdivisions: SubdivisionFormRow[];
 };
 
 function uniqueSlug(base: string, taken: Set<string>): string {
@@ -95,7 +88,6 @@ export function NewTournamentForm() {
       labelManual: false,
       feeUsd: "",
       maxTeams: "",
-      subdivisions: [],
     },
   ]);
 
@@ -165,7 +157,6 @@ export function NewTournamentForm() {
         labelManual: false,
         feeUsd: "",
         maxTeams: "",
-        subdivisions: [],
       },
     ]);
   }
@@ -220,50 +211,6 @@ export function NewTournamentForm() {
         return next;
       });
     });
-  }
-
-  function addSubdivision(catKey: string) {
-    setCategories((rows) =>
-      rows.map((r) => {
-        if (r.key !== catKey) return r;
-        const nextSubs = [
-          ...r.subdivisions,
-          { key: crypto.randomUUID(), label: "", maxTeams: "" },
-        ];
-        const patch: Partial<CategoryFormRow> = { subdivisions: nextSubs };
-        if (nextSubs.length > 1) patch.maxTeams = "";
-        return { ...r, ...patch };
-      }),
-    );
-  }
-
-  function removeSubdivision(catKey: string, subKey: string) {
-    setCategories((rows) =>
-      rows.map((r) => {
-        if (r.key !== catKey) return r;
-        const nextSubs = r.subdivisions.filter((s) => s.key !== subKey);
-        return { ...r, subdivisions: nextSubs };
-      }),
-    );
-  }
-
-  function updateSubdivision(
-    catKey: string,
-    subKey: string,
-    patch: Partial<Pick<SubdivisionFormRow, "label" | "maxTeams">>,
-  ) {
-    setCategories((rows) =>
-      rows.map((r) =>
-        r.key === catKey
-          ? {
-              ...r,
-              subdivisions: r.subdivisions.map((s) =>
-                s.key === subKey ? { ...s, ...patch } : s,
-              ),
-            }
-          : r,
-      ),
-    );
   }
 
   function onPromoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -368,54 +315,14 @@ export function NewTournamentForm() {
         catFee = c;
       }
 
-      const multiDiv = row.subdivisions.length > 1;
-
       let maxTeams: number | null = null;
-      if (!multiDiv) {
-        if (row.maxTeams.trim()) {
-          const m = Number.parseInt(row.maxTeams.trim(), 10);
-          if (Number.isNaN(m) || m < 1) {
-            setError(`Categoría ${i + 1}: cupo máximo inválido.`);
-            return;
-          }
-          maxTeams = m;
-        }
-      }
-
-      const subs: { id: string; label: string; maxTeams: number | null }[] = [];
-      let sumSubCaps = 0;
-      for (let j = 0; j < row.subdivisions.length; j++) {
-        const sub = row.subdivisions[j];
-        const lab = sub.label.trim();
-        if (!lab) {
-          setError(`Categoría ${i + 1}, subdivisión ${j + 1}: indica etiqueta o quítala.`);
+      if (row.maxTeams.trim()) {
+        const m = Number.parseInt(row.maxTeams.trim(), 10);
+        if (Number.isNaN(m) || m < 1) {
+          setError(`Categoría ${i + 1}: cupo máximo inválido.`);
           return;
         }
-        let subMax: number | null = null;
-        if (multiDiv) {
-          if (!sub.maxTeams.trim()) {
-            setError(
-              `Categoría ${i + 1}, subdivisión "${lab || j + 1}": indica cupo máximo de equipos.`,
-            );
-            return;
-          }
-          const sm = Number.parseInt(sub.maxTeams.trim(), 10);
-          if (Number.isNaN(sm) || sm < 1) {
-            setError(`Categoría ${i + 1}, subdivisión ${j + 1}: cupo inválido.`);
-            return;
-          }
-          subMax = sm;
-          sumSubCaps += sm;
-        }
-        subs.push({
-          id: `local-sub-${crypto.randomUUID()}`,
-          label: lab,
-          maxTeams: subMax,
-        });
-      }
-
-      if (multiDiv) {
-        maxTeams = sumSubCaps;
+        maxTeams = m;
       }
 
       const autoLabel = buildDefaultCategoryLabel(
@@ -436,7 +343,7 @@ export function NewTournamentForm() {
         categoryTitleManual: row.labelManual,
         feeCents: catFee,
         maxTeams,
-        subdivisions: subs,
+        subdivisions: [],
       });
     }
 
@@ -716,16 +623,7 @@ export function NewTournamentForm() {
           </button>
         </div>
         <ul className="space-y-4">
-          {categories.map((row) => {
-            const multiDiv = row.subdivisions.length > 1;
-            const subCapSum = multiDiv
-              ? row.subdivisions.reduce((acc, s) => {
-                  const n = Number.parseInt(s.maxTeams.trim(), 10);
-                  return acc + (Number.isNaN(n) || n < 1 ? 0 : n);
-                }, 0)
-              : 0;
-
-            return (
+          {categories.map((row) => (
             <li
               key={row.key}
               className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700"
@@ -849,90 +747,21 @@ export function NewTournamentForm() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    {multiDiv
-                      ? "Cupo total categoría (suma divisiones)"
-                      : "Cupo máx. equipos (opcional)"}
+                    Cupo máx. equipos (opcional)
                   </label>
                   <input
                     inputMode="numeric"
-                    placeholder={multiDiv ? "—" : "16"}
-                    value={multiDiv ? String(subCapSum) : row.maxTeams}
-                    disabled={multiDiv}
+                    placeholder="16"
+                    value={row.maxTeams}
                     onChange={(e) =>
                       updateCategory(row.key, { maxTeams: e.target.value })
                     }
-                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-950 dark:disabled:bg-zinc-900"
+                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
                   />
                 </div>
               </div>
-
-              <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Divisiones dentro de esta categoría (opcional)
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => addSubdivision(row.key)}
-                    className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
-                  >
-                    + Añadir subdivisión
-                  </button>
-                </div>
-                {row.subdivisions.length === 0 ? (
-                  <p className="mt-2 text-xs text-zinc-500">
-                    Sin subdivisión: la categoría es una sola lista de equipos.
-                  </p>
-                ) : (
-                  <>
-                    {multiDiv ? (
-                      <p className="mt-2 text-xs text-zinc-500">
-                        Hay más de una división: indica el cupo máximo por cada una; el total de la categoría se calcula solo.
-                      </p>
-                    ) : null}
-                    <ul className="mt-3 space-y-2">
-                      {row.subdivisions.map((sub, sidx) => (
-                        <li key={sub.key} className="flex flex-wrap items-center gap-2">
-                          <input
-                            placeholder={`Etiqueta subdivisión ${sidx + 1}`}
-                            value={sub.label}
-                            onChange={(e) =>
-                              updateSubdivision(row.key, sub.key, {
-                                label: e.target.value,
-                              })
-                            }
-                            className="min-w-[8rem] flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-                          />
-                          {multiDiv ? (
-                            <input
-                              inputMode="numeric"
-                              placeholder="Cupo"
-                              value={sub.maxTeams}
-                              onChange={(e) =>
-                                updateSubdivision(row.key, sub.key, {
-                                  maxTeams: e.target.value,
-                                })
-                              }
-                              className="w-24 shrink-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-                              aria-label={`Cupo subdivisión ${sidx + 1}`}
-                            />
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => removeSubdivision(row.key, sub.key)}
-                            className="shrink-0 text-xs text-red-600 hover:underline dark:text-red-400"
-                          >
-                            Quitar
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </div>
             </li>
-            );
-          })}
+          ))}
         </ul>
       </div>
 
