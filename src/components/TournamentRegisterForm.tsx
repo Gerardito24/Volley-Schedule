@@ -7,6 +7,7 @@ import type {
   TournamentMock,
 } from "@/lib/mock-data";
 import { appendStoredRegistration } from "@/lib/local-registrations";
+import { createStubRosterFromRegistration } from "@/lib/local-team-rosters";
 import { downloadRegistrationPdf } from "@/lib/registrationPdf";
 import { effectiveCategoryFeeCents } from "@/lib/tournament-pricing";
 
@@ -49,6 +50,7 @@ export function TournamentRegisterForm({
     tournament.categories[0]?.id ?? "",
   );
   const [subdivisionId, setSubdivisionId] = useState<string | "">("");
+  const [clubName, setClubName] = useState("");
   const [teamName, setTeamName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -94,6 +96,10 @@ export function TournamentRegisterForm({
       setError("Elige una subdivisión.");
       return;
     }
+    if (!clubName.trim()) {
+      setError("Indica el nombre del club.");
+      return;
+    }
     if (!teamName.trim()) {
       setError("Indica el nombre del equipo.");
       return;
@@ -116,6 +122,7 @@ export function TournamentRegisterForm({
       tournamentName: tournament.name,
       divisionLabel,
       teamName: teamName.trim(),
+      clubName: clubName.trim(),
       status: "pending_payment",
       updatedAt: now.slice(0, 10),
       feeCents: fee,
@@ -125,9 +132,11 @@ export function TournamentRegisterForm({
     };
 
     appendStoredRegistration(row);
+    createStubRosterFromRegistration(row);
     setLastCreated(row);
 
     setDone(true);
+    setClubName("");
     setTeamName("");
   }
 
@@ -222,14 +231,28 @@ export function TournamentRegisterForm({
 
       <div>
         <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
+          Nombre del club
+        </label>
+        <input
+          value={clubName}
+          onChange={(e) => setClubName(e.target.value)}
+          className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
+          placeholder="Ej. Metro VB"
+        />
+        <p className="mt-1 text-xs text-zinc-400">Organización o club al que pertenece el equipo.</p>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
           Nombre del equipo
         </label>
         <input
           value={teamName}
           onChange={(e) => setTeamName(e.target.value)}
           className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-          placeholder="Ej. Metro VB"
+          placeholder="Ej. Metro VB 14U"
         />
+        <p className="mt-1 text-xs text-zinc-400">Nombre específico del equipo que compite en esta categoría.</p>
       </div>
 
       <div>

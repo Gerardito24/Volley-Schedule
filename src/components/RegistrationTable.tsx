@@ -1,10 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RegistrationRowMock } from "@/lib/mock-data";
 import { upsertStoredRegistration } from "@/lib/local-registrations";
 import { downloadRegistrationPdf } from "@/lib/registrationPdf";
-import { RegistrationSheet } from "@/components/RegistrationSheet";
 
 function formatMoney(cents: number) {
   return new Intl.NumberFormat("es-PR", {
@@ -45,9 +45,10 @@ function centsToInput(c: number): string {
 function rowsToCsv(rows: RegistrationRowMock[]) {
   const header = [
     "id",
+    "club",
+    "team",
     "tournament",
     "division",
-    "team",
     "status",
     "fee_usd",
     "updated_at",
@@ -55,9 +56,10 @@ function rowsToCsv(rows: RegistrationRowMock[]) {
   const lines = rows.map((r) =>
     [
       r.id,
+      r.clubName || "",
+      r.teamName,
       r.tournamentName,
       r.divisionLabel,
-      r.teamName,
       r.status,
       (r.feeCents / 100).toFixed(2),
       r.updatedAt,
@@ -83,7 +85,6 @@ export function RegistrationTable({
 }) {
   const tools = Boolean(registrationTools);
 
-  const [sheetRow, setSheetRow] = useState<RegistrationRowMock | null>(null);
   const [editing, setEditing] = useState<{
     rowId: string;
     field: EditableField;
@@ -235,6 +236,9 @@ export function RegistrationTable({
                 </th>
               ) : null}
               <th className="px-4 py-3 text-left font-medium text-zinc-700 dark:text-zinc-300">
+                Club
+              </th>
+              <th className="px-4 py-3 text-left font-medium text-zinc-700 dark:text-zinc-300">
                 División
               </th>
               <th className="px-4 py-3 text-left font-medium text-zinc-700 dark:text-zinc-300">
@@ -262,13 +266,12 @@ export function RegistrationTable({
                 {tools ? (
                   <td className="whitespace-nowrap px-4 py-3">
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
-                      <button
-                        type="button"
-                        onClick={() => setSheetRow(r)}
+                      <Link
+                        href={`/admin/registrations/${encodeURIComponent(r.id)}`}
                         className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
                       >
                         Abrir
-                      </button>
+                      </Link>
                       <button
                         type="button"
                         onClick={() => downloadRegistrationPdf(r)}
@@ -287,6 +290,9 @@ export function RegistrationTable({
                       "whitespace-nowrap px-4 py-3 text-zinc-900 dark:text-zinc-100",
                     )
                   : null}
+                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                  {r.clubName || <span className="italic text-zinc-400">—</span>}
+                </td>
                 {renderEditableCell(
                   r,
                   "divisionLabel",
@@ -348,14 +354,6 @@ export function RegistrationTable({
         </table>
       </div>
 
-      {tools ? (
-        <RegistrationSheet
-          row={sheetRow}
-          open={sheetRow != null}
-          onClose={() => setSheetRow(null)}
-          onSaved={(next) => setSheetRow(next)}
-        />
-      ) : null}
     </div>
   );
 }

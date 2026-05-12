@@ -72,6 +72,7 @@ export function RegistrationSheet({
       tournamentName: draft.tournamentName,
       divisionLabel: draft.divisionLabel,
       teamName: draft.teamName,
+      clubName: draft.clubName ?? draft.teamName,
       status: draft.status,
       updatedAt: new Date().toISOString().slice(0, 10),
       feeCents: feeParsed ?? draft.feeCents,
@@ -129,6 +130,19 @@ export function RegistrationSheet({
                 onChange={(e) =>
                   setDraft((d) =>
                     d ? { ...d, tournamentName: e.target.value } : d,
+                  )
+                }
+                className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-xs font-medium text-zinc-500">Club</span>
+              <input
+                value={draft.clubName ?? ""}
+                onChange={(e) =>
+                  setDraft((d) =>
+                    d ? { ...d, clubName: e.target.value } : d,
                   )
                 }
                 className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"

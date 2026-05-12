@@ -39,7 +39,10 @@ export type RegistrationRowMock = {
   tournamentSlug: string;
   tournamentName: string;
   divisionLabel: string;
+  /** Nombre del equipo que compite (ej. "Metro VB 14U"). */
   teamName: string;
+  /** Nombre del club al que pertenece el equipo (ej. "Metro VB"). */
+  clubName: string;
   status:
     | "draft"
     | "pending_payment"
@@ -131,7 +134,8 @@ export const registrationRows: RegistrationRowMock[] = [
     tournamentSlug: "copa-30-summer-2026",
     tournamentName: "Copa 30 Summer",
     divisionLabel: "16U Masculino",
-    teamName: "Las Piedras VC",
+    teamName: "Las Piedras VC 16U",
+    clubName: "Las Piedras VC",
     status: "paid",
     updatedAt: "2026-05-01",
     feeCents: 27500,
@@ -144,7 +148,8 @@ export const registrationRows: RegistrationRowMock[] = [
     tournamentSlug: "copa-30-summer-2026",
     tournamentName: "Copa 30 Summer",
     divisionLabel: "14U Femenino",
-    teamName: "Metro VB",
+    teamName: "Metro VB 14U",
+    clubName: "Metro VB",
     status: "approved",
     updatedAt: "2026-05-02",
     feeCents: 25000,
@@ -157,7 +162,8 @@ export const registrationRows: RegistrationRowMock[] = [
     tournamentSlug: "copa-30-summer-2026",
     tournamentName: "Copa 30 Summer",
     divisionLabel: "14U Femenino",
-    teamName: "Bayamón Youth",
+    teamName: "Bayamón Youth 14U",
+    clubName: "Bayamón Youth",
     status: "paid",
     updatedAt: "2026-05-03",
     feeCents: 25000,
@@ -170,7 +176,8 @@ export const registrationRows: RegistrationRowMock[] = [
     tournamentSlug: "premier-5c-2026",
     tournamentName: "Premier 5C",
     divisionLabel: "18U",
-    teamName: "Oeste Elite",
+    teamName: "Oeste Elite 18U",
+    clubName: "Oeste Elite",
     status: "under_review",
     updatedAt: "2026-05-03",
     feeCents: 29000,

@@ -49,6 +49,7 @@ export function downloadRegistrationPdf(row: RegistrationRowMock): void {
   pair("Torneo", row.tournamentName);
   pair("Slug torneo", row.tournamentSlug);
   pair("División", row.divisionLabel);
+  pair("Club", row.clubName || "—");
   pair("Equipo", row.teamName);
   pair("Estado", statusLabels[row.status]);
   pair("Tarifa", formatMoney(row.feeCents));

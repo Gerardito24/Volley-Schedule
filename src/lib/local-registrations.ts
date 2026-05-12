@@ -14,7 +14,13 @@ export function readStoredRegistrations(): RegistrationRowMock[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isRegistrationRowMock);
+    return (parsed.filter(isRegistrationRowMock) as RegistrationRowMock[]).map(
+      (r) => ({
+        ...r,
+        // Backwards-compat: rows saved before clubName was added
+        clubName: r.clubName || r.teamName,
+      }),
+    );
   } catch {
     return [];
   }
@@ -66,6 +72,8 @@ function isRegistrationRowMock(value: unknown): value is RegistrationRowMock {
     typeof o.tournamentName === "string" &&
     typeof o.divisionLabel === "string" &&
     typeof o.teamName === "string" &&
+    // clubName: optional for backwards-compat; fallback applied on read
+    (o.clubName === undefined || typeof o.clubName === "string") &&
     statusOk &&
     typeof o.updatedAt === "string" &&
     typeof o.feeCents === "number" &&
