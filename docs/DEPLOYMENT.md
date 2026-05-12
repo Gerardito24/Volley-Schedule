@@ -50,11 +50,8 @@ Misma app Next servida con `next start` tras `next build`.
 ### Pasos
 
 1. En [Railway](https://railway.app): **New Project** → **Deploy from GitHub** → mismo repo.
-2. Railway (Nixpacks) detecta Node. En **Settings** del servicio verifica:
-   - **Build**: debe ejecutar `npm install` (o `npm ci`) y luego `npm run build`.
-   - **Start**: `npm run start` (Next escucha el puerto en `PORT` que Railway inyecta).
+2. Railway (Nixpacks) detecta Node. El repo incluye [`nixpacks.toml`](../nixpacks.toml): instala con `npm install` (no `npm ci`) para evitar fallos si `package-lock.json` va un commit desfasado respecto a `package.json`; igual conviene mantener el lock actualizado en local (`npm install`) y hacer commit. En **Settings** del servicio verifica **Start**: `npm run start` (Next usa `PORT` que Railway inyecta).
 3. **Generate Domain** (o dominio custom) en la pestaña **Networking**.
-4. Opcional: el repo incluye [`nixpacks.toml`](../nixpacks.toml) en la raíz para fijar Node 20 y la fase de build.
 
 ### Nota
 

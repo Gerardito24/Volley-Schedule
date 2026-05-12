@@ -5,7 +5,8 @@
 NIXPACKS_NODE_VERSION = "20"
 
 [phases.install]
-cmds = ["npm ci"]
+# `npm install` tolerates a lockfile slightly behind package.json; `npm ci` fails the whole build if they differ.
+cmds = ["npm install --no-audit --no-fund"]
 
 [phases.build]
 cmds = ["npm run build"]
