@@ -53,10 +53,13 @@ function centsToInput(c: number | null): string {
 
 type VenueRowDraft = { label: string; courtCountInput: string };
 
+type DivisionRowDraft = { id: string; label: string };
+
 type GeneralDraft = {
   name: string;
   description: string;
   venueRows: VenueRowDraft[];
+  divisionRows: DivisionRowDraft[];
   registrationDeadlineOn: string;
   tournamentStartsOn: string;
   tournamentEndsOn: string;
@@ -86,6 +89,7 @@ function tournamentToGeneralDraft(t: TournamentMock): GeneralDraft {
     name: nt.name,
     description: nt.description,
     venueRows,
+    divisionRows: nt.divisions.map((d) => ({ id: d.id, label: d.label })),
     registrationDeadlineOn: nt.registrationDeadlineOn,
     tournamentStartsOn: nt.tournamentStartsOn,
     tournamentEndsOn: nt.tournamentEndsOn,
@@ -139,6 +143,7 @@ function AdminTournamentDetailInner() {
 
   const [generalDraft, setGeneralDraft] = useState<GeneralDraft | null>(null);
   const [generalSaved, setGeneralSaved] = useState(false);
+  const [generalError, setGeneralError] = useState<string | null>(null);
   const [categoryDraft, setCategoryDraft] = useState<{
     label: string;
     ageLabel: string;
@@ -154,6 +159,7 @@ function AdminTournamentDetailInner() {
       return;
     }
     setGeneralDraft(tournamentToGeneralDraft(tournament));
+    setGeneralError(null);
   }, [tournament]);
 
   const selectedCategory = useMemo(() => {
@@ -208,8 +214,30 @@ function AdminTournamentDetailInner() {
     [refreshMerged],
   );
 
+  const handleAddCategory = useCallback(() => {
+    if (!tournament) return;
+    const nt = normalizeTournament(tournament);
+    const firstDivId = nt.divisions[0]?.id ?? "div-general";
+    const newCat: CategoryMock = {
+      id: `admin-cat-${crypto.randomUUID()}`,
+      label: "Nueva categoría",
+      ageLabel: "",
+      divisionId: firstDivId,
+      feeCents: nt.registrationFeeCents,
+      maxTeams: null,
+      subdivisions: [],
+    };
+    const next = normalizeTournament({
+      ...nt,
+      categories: [...nt.categories, newCat],
+    });
+    persistTournament(next);
+    setCategoryQuery(newCat.id);
+  }, [persistTournament, setCategoryQuery, tournament]);
+
   const handleSaveGeneral = useCallback(() => {
     if (!tournament || !generalDraft) return;
+    setGeneralError(null);
     const parsedRows = generalDraft.venueRows.map((row) => ({
       label: row.label.trim(),
       courtCount: parseCourtCountInput(row.courtCountInput),
@@ -224,11 +252,27 @@ function AdminTournamentDetailInner() {
               courtCount: null,
             },
           ];
+
+    const divisionsPayload = generalDraft.divisionRows
+      .map((r) => ({ id: r.id, label: r.label.trim() }))
+      .filter((r) => r.label.length > 0);
+    if (divisionsPayload.length === 0) {
+      setGeneralError("Agrega al menos una división con nombre.");
+      return;
+    }
+    const validDivIds = new Set(divisionsPayload.map((d) => d.id));
+    const fallbackDivId = divisionsPayload[0]!.id;
+    const categories = tournament.categories.map((c) =>
+      validDivIds.has(c.divisionId) ? c : { ...c, divisionId: fallbackDivId },
+    );
+
     const next = normalizeTournament({
       ...tournament,
       name: generalDraft.name.trim() || tournament.name,
       description: generalDraft.description,
       venues,
+      divisions: divisionsPayload,
+      categories,
       locationLabel: venues.map((v) => v.label).join(" · "),
       registrationDeadlineOn: generalDraft.registrationDeadlineOn,
       tournamentStartsOn: generalDraft.tournamentStartsOn,
@@ -238,9 +282,17 @@ function AdminTournamentDetailInner() {
       publicEntryFeeCents: dollarsToCents(generalDraft.publicEntryFeeInput),
     });
     persistTournament(next);
+    for (const cat of next.categories) {
+      syncRegistrationDivisionLabelsForCategory(next, cat.id, cat);
+    }
     setGeneralSaved(true);
     window.setTimeout(() => setGeneralSaved(false), 2000);
-  }, [generalDraft, persistTournament, tournament]);
+  }, [
+    generalDraft,
+    persistTournament,
+    syncRegistrationDivisionLabelsForCategory,
+    tournament,
+  ]);
 
   const handleSaveCategory = useCallback(() => {
     if (!tournament || !selectedCategory || !categoryDraft) return;
@@ -700,6 +752,81 @@ function AdminTournamentDetailInner() {
                   ))}
                 </div>
               </div>
+              <div className="relative lg:col-span-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Divisiones del torneo
+                  </span>
+                  <button
+                    type="button"
+                    title="Agregar división"
+                    onClick={() =>
+                      setGeneralDraft((d) =>
+                        d
+                          ? {
+                              ...d,
+                              divisionRows: [
+                                ...d.divisionRows,
+                                { id: crypto.randomUUID(), label: "" },
+                              ],
+                            }
+                          : d,
+                      )
+                    }
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-white text-lg font-semibold leading-none text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    +
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Las categorías eligen una de estas divisiones. Se guardan al pulsar Guardar datos del torneo.
+                </p>
+                <div className="mt-2 space-y-2">
+                  {generalDraft.divisionRows.map((row) => (
+                    <div key={row.id} className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="text"
+                        value={row.label}
+                        onChange={(e) =>
+                          setGeneralDraft((d) => {
+                            if (!d) return d;
+                            return {
+                              ...d,
+                              divisionRows: d.divisionRows.map((r) =>
+                                r.id === row.id
+                                  ? { ...r, label: e.target.value }
+                                  : r,
+                              ),
+                            };
+                          })
+                        }
+                        placeholder="Nombre de la división"
+                        className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                      />
+                      {generalDraft.divisionRows.length > 1 ? (
+                        <button
+                          type="button"
+                          title="Quitar división"
+                          onClick={() =>
+                            setGeneralDraft((d) => {
+                              if (!d || d.divisionRows.length <= 1) return d;
+                              return {
+                                ...d,
+                                divisionRows: d.divisionRows.filter(
+                                  (r) => r.id !== row.id,
+                                ),
+                              };
+                            })
+                          }
+                          className="shrink-0 rounded-lg border border-zinc-200 px-2.5 py-2 text-sm text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
               <label className="block text-sm lg:col-span-2">
                 <span className="font-medium text-zinc-700 dark:text-zinc-300">
                   Descripción
@@ -748,6 +875,11 @@ function AdminTournamentDetailInner() {
                 />
               </label>
             </div>
+            {generalError ? (
+              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200">
+                {generalError}
+              </p>
+            ) : null}
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <button
                 type="button"
@@ -839,9 +971,18 @@ function AdminTournamentDetailInner() {
       </div>
 
       <section>
-        <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-          Categorías
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            Categorías
+          </h3>
+          <button
+            type="button"
+            onClick={handleAddCategory}
+            className="rounded-full border border-emerald-600 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-200 dark:hover:bg-emerald-900/60"
+          >
+            + Añadir categoría
+          </button>
+        </div>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           Hacé clic en una categoría para ver y editar solo sus inscripciones.
         </p>
