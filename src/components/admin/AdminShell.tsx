@@ -10,6 +10,11 @@ export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>
   const pathname = usePathname();
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -53,22 +58,36 @@ export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-100 text-sm text-zinc-600">
+      <div className="flex min-h-dvh items-center justify-center bg-zinc-100 text-sm text-zinc-600">
         Cargando…
       </div>
     );
   }
 
   if (isPublicShell) {
-    return <div className="min-h-screen bg-zinc-100 text-zinc-900">{children}</div>;
+    return (
+      <div className="min-h-dvh bg-zinc-100 px-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-[max(1rem,env(safe-area-inset-top,0px))] text-zinc-900">
+        {children}
+      </div>
+    );
   }
 
   return (
-    <div className="flex min-h-screen flex-1 bg-zinc-100 text-zinc-900">
-      <AdminSidebar />
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <AdminTopBar />
-        <div className="flex-1 overflow-auto p-6 lg:p-8">{children}</div>
+    <div className="flex min-h-dvh flex-1 bg-zinc-100 text-zinc-900">
+      {menuOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+          aria-label="Cerrar menú de navegación"
+          onClick={() => setMenuOpen(false)}
+        />
+      ) : null}
+      <AdminSidebar menuOpen={menuOpen} />
+      <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
+        <AdminTopBar onMenuClick={() => setMenuOpen(true)} />
+        <div className="flex-1 overflow-auto p-4 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] sm:p-6 lg:p-8">
+          {children}
+        </div>
       </div>
     </div>
   );

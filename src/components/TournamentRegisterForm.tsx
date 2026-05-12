@@ -452,7 +452,7 @@ export function TournamentRegisterForm({
         <button
           type="button"
           onClick={() => setStep(2)}
-          className="flex items-center gap-2 rounded-full bg-zinc-800 px-8 py-3 text-sm font-bold text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          className="flex min-h-[44px] items-center gap-2 rounded-full bg-zinc-800 px-8 py-3 text-sm font-bold text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
         >
           Continuar <span aria-hidden>›</span>
         </button>
@@ -483,7 +483,7 @@ export function TournamentRegisterForm({
         <button
           type="button"
           onClick={() => setReuseOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-5 py-4 text-left"
+          className="flex min-h-[44px] w-full items-center justify-between px-5 py-3 text-left sm:min-h-0 sm:py-4"
         >
           <div className="flex items-center gap-2">
             <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-emerald-600 dark:text-emerald-400">
@@ -943,7 +943,7 @@ export function TournamentRegisterForm({
               type="checkbox"
               checked={terms[i]}
               onChange={() => toggleTerm(i)}
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-zinc-400 text-emerald-600 focus:ring-emerald-500"
+              className="mt-0.5 h-5 w-5 min-h-[20px] min-w-[20px] shrink-0 rounded border-zinc-400 text-emerald-600 focus:ring-emerald-500"
             />
             <span>{text}</span>
           </label>
@@ -959,17 +959,17 @@ export function TournamentRegisterForm({
       </section>
 
       {/* ── Footer buttons ── */}
-      <div className="flex items-center gap-3 border-t border-zinc-200 pt-6 dark:border-zinc-700">
+      <div className="flex flex-wrap items-center gap-3 border-t border-zinc-200 pt-6 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] dark:border-zinc-700">
         <button
           type="button"
           onClick={() => setStep(1)}
-          className="rounded-full border border-zinc-300 px-6 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          className="min-h-[44px] rounded-full border border-zinc-300 px-6 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
           ‹ Regresar
         </button>
         <button
           type="submit"
-          className="rounded-full bg-zinc-800 px-8 py-2.5 text-sm font-bold text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          className="min-h-[44px] rounded-full bg-zinc-800 px-8 py-2.5 text-sm font-bold text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
         >
           Completar
         </button>

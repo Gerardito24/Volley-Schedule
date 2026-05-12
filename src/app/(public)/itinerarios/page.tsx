@@ -92,7 +92,7 @@ export default function ItinerariosPage() {
                   </div>
                   <Link
                     href={`/tournaments/${t.slug}#itinerario`}
-                    className="shrink-0 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                    className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
                   >
                     Ver itinerario completo →
                   </Link>

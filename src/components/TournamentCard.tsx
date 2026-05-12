@@ -99,14 +99,14 @@ export function TournamentCard({ tournament }: { tournament: TournamentMock }) {
         <div className="mt-auto flex gap-2 pt-3">
           <Link
             href={`/tournaments/${tournament.slug}`}
-            className="flex flex-1 items-center justify-center rounded-full border border-zinc-300 py-2.5 text-sm font-semibold text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-800 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-200"
+            className="flex min-h-[44px] flex-1 items-center justify-center rounded-full border border-zinc-300 px-3 py-2.5 text-sm font-semibold text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-800 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-200"
           >
             Ver detalle
           </Link>
           {open ? (
             <Link
               href={`/tournaments/${tournament.slug}/register`}
-              className="flex flex-1 items-center justify-center rounded-full bg-emerald-600 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 active:scale-95"
+              className="flex min-h-[44px] flex-1 items-center justify-center rounded-full bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 active:scale-95"
             >
               Inscribirse
             </Link>

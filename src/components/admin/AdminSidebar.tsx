@@ -37,12 +37,19 @@ const nav = [
   },
 ] as const;
 
-export function AdminSidebar() {
+export function AdminSidebar({ menuOpen }: { menuOpen: boolean }) {
   const pathname = usePathname();
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-slate-800/80 bg-slate-950 text-slate-300">
-      <div className="border-b border-slate-800/80 px-5 py-6">
+    <aside
+      className={[
+        "flex w-64 flex-col border-r border-slate-800/80 bg-slate-950 text-slate-300",
+        "fixed inset-y-0 left-0 z-40 shadow-2xl transition-transform duration-200 ease-out",
+        "lg:relative lg:z-0 lg:translate-x-0 lg:shadow-none",
+        menuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+      ].join(" ")}
+    >
+      <div className="border-b border-slate-800/80 px-5 pb-6 pt-[max(1.25rem,env(safe-area-inset-top,0px))] lg:pt-6">
         <Link href="/admin" className="block">
           <p className="text-lg font-bold tracking-tight text-white">VolleySchedule</p>
           <p className="mt-0.5 text-xs font-medium text-slate-500">Registro de torneos</p>
@@ -52,7 +59,7 @@ export function AdminSidebar() {
         </Link>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-0.5 px-3 py-4">
+      <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain px-3 py-4">
         {nav.map((item) => {
           const active = item.match(pathname);
           const Icon = item.icon;
@@ -60,7 +67,7 @@ export function AdminSidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              className={`flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:min-h-0 lg:py-2.5 ${
                 active
                   ? "bg-sky-600/20 text-white ring-1 ring-sky-500/40"
                   : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
@@ -73,7 +80,7 @@ export function AdminSidebar() {
         })}
       </nav>
 
-      <div className="border-t border-slate-800/80 px-4 py-4">
+      <div className="border-t border-slate-800/80 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
         <Link
           href="/"
           className="text-xs text-slate-500 transition-colors hover:text-slate-300"

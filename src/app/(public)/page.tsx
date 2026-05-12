@@ -82,7 +82,7 @@ function ActiveBanner({ tournament }: { tournament: TournamentMock }) {
         </div>
         <Link
           href={`/tournaments/${tournament.slug}#itinerario`}
-          className="shrink-0 self-start rounded-full bg-white px-8 py-3 text-sm font-bold text-zinc-900 shadow-lg transition hover:bg-emerald-50 md:self-auto"
+          className="inline-flex min-h-[44px] shrink-0 items-center justify-center self-start rounded-full bg-white px-6 py-3 text-sm font-bold text-zinc-900 shadow-lg transition hover:bg-emerald-50 sm:px-8 md:self-auto"
         >
           Ver itinerario →
         </Link>
@@ -144,14 +144,14 @@ function TournamentCard({ t }: { t: TournamentMock }) {
           {open ? (
             <Link
               href={`/tournaments/${t.slug}/register`}
-              className="flex w-full items-center justify-center rounded-full bg-emerald-600 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 active:scale-95"
+              className="flex min-h-[44px] w-full items-center justify-center rounded-full bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 active:scale-95"
             >
               Inscribirse
             </Link>
           ) : (
             <Link
               href={`/tournaments/${t.slug}`}
-              className="flex w-full items-center justify-center rounded-full border border-zinc-300 py-2.5 text-sm font-semibold text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-800 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-200"
+              className="flex min-h-[44px] w-full items-center justify-center rounded-full border border-zinc-300 px-3 py-2.5 text-sm font-semibold text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-800 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-200"
             >
               Ver torneo
             </Link>
@@ -222,7 +222,7 @@ export default function PublicHomePage() {
             </h2>
             <Link
               href="/tournaments"
-              className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+              className="inline-flex min-h-[44px] items-center rounded-lg px-2 text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
             >
               Ver todos →
             </Link>

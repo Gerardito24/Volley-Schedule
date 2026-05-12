@@ -128,7 +128,7 @@ export default async function TournamentDetailPage(props: Props) {
         {open ? (
           <Link
             href={`/tournaments/${tournament.slug}/register`}
-            className="inline-flex rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-700"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-full bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-700"
           >
             Inscribir un equipo
           </Link>
