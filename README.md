@@ -13,21 +13,22 @@ Aplicación web (Next.js) para **centralizar inscripciones** que hoy se dispersa
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Entidades MVP y diagrama |
 | [docs/WIREFRAMES.md](docs/WIREFRAMES.md) | Layout equipos vs admin |
 | [docs/VOLLEYSCHEDULE_INTEGRATION.md](docs/VOLLEYSCHEDULE_INTEGRATION.md) | Subdominio y sustitución de enlaces Cognito |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Primer deploy en Vercel (staging) |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deploy en **Vercel** y/o **Railway**, variables y checklist |
 
 ## Esquema base de datos
 
-SQL inicial para Supabase: [supabase/migrations/001_initial_schema.sql](supabase/migrations/001_initial_schema.sql).
+SQL inicial para Supabase (opcional / futuro): [supabase/migrations/001_initial_schema.sql](supabase/migrations/001_initial_schema.sql).
 
 ## Desarrollo local
 
 ```bash
-cd volleyschedule-registrations
+git clone <tu-repo>
+cd Volley-Schedule
 npm install
 npm run dev
 ```
 
-Copiar `.env.example` a `.env.local` cuando se conecte Supabase.
+Opcional: copiar [`.env.example`](.env.example) a `.env.local` si usas `NEXT_PUBLIC_ADMIN_APP_URL` u otras variables públicas.
 
 ## Rutas MVP (mock)
 

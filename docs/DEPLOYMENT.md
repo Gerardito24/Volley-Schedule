@@ -1,36 +1,68 @@
-# Deploy de staging (primer entorno)
+# Deploy: Vercel y/o Railway (Volley-Schedule)
 
-## Prerrequisitos
+Esta app es **un solo proyecto Next.js** en la raíz del repo. Los datos actuales viven en **localStorage** del navegador (no hace falta base de datos en el servidor para el MVP).
+
+Elige **una URL canónica** para usuarios finales (recomendado: Vercel). Desplegar en Vercel y Railway a la vez da dos orígenes distintos: el `localStorage` no se comparte entre dominios.
+
+---
+
+## Vercel (recomendado)
+
+### Prerrequisitos
 
 1. Cuenta en [Vercel](https://vercel.com/).
-2. Proyecto en Supabase (opcional para UI mock): crear proyecto y ejecutar `supabase/migrations/001_initial_schema.sql` en el SQL Editor.
-3. Repositorio Git (GitHub/GitLab/Bitbucket) con este código.
+2. Repo en GitHub con este código (por ejemplo `Gerardito24/Volley-Schedule`).
 
-## Pasos Vercel
+### Pasos
 
-1. **Import project** → seleccionar el repo que contiene `volleyschedule-registrations/` (o subir esta carpeta como raíz del repo).
-2. **Root Directory**: si el repo es solo esta app, dejar vacío; si es monorepo, apuntar a `volleyschedule-registrations`.
-3. **Framework**: Next.js (auto-detectado).
-4. **Environment Variables** (staging):
+1. En Vercel: **Add New Project** → **Import** el repositorio.
+2. **Root Directory**: dejar la raíz del repo (no hay monorepo en este proyecto).
+3. **Framework Preset**: Next.js (autodetectado).
+4. **Build Command**: `npm run build` (por defecto).
+5. **Install Command**: `npm install` o `npm ci` (por defecto).
+6. **Node**: 20.x (alineado con `engines` en `package.json`).
 
-   | Variable | Descripción |
-   |----------|-------------|
-   | `NEXT_PUBLIC_SITE_URL` | URL del deploy, ej. `https://volleyschedule-registrations-xxx.vercel.app` |
-   | `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase |
-   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon key |
-   | `SUPABASE_SERVICE_ROLE_KEY` | solo server/webhooks; no exponer al cliente |
+### Variables de entorno (opcionales)
 
-   Variables de Stripe cuando exista checkout: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`.
+| Variable | Cuándo usarla |
+|----------|----------------|
+| `NEXT_PUBLIC_ADMIN_APP_URL` | Solo si el panel admin debe abrirse en **otro dominio**. Si se omite, el icono de perfil en el header usa `/admin` en el mismo sitio. |
 
-5. Deploy → cada push a la rama configurada genera **Preview**; producción puede ser `main`.
+No es necesario configurar Supabase/Stripe para el flujo actual mock + localStorage.
 
-## Dominio personalizado (staging)
+### Dominio y CI
 
-- En Vercel: **Settings → Domains** → agregar `registro.volleyschedule.com`.
-- En DNS del proveedor del dominio: registro **CNAME** `registro` → `cname.vercel-dns.com` (valor exacto lo muestra Vercel).
+- **Settings → Domains**: añade tu dominio; Vercel indica el CNAME (p. ej. `cname.vercel-dns.com`).
+- Conecta la rama `main` para **Production Deploys** en cada push.
 
-## Checklist post-deploy
+### Checklist post-deploy
 
-- [ ] Home carga y enlaza a `/tournaments`.
-- [ ] Ruta `/tournaments/[slug]` resuelve para slugs mock.
-- [ ] `/admin/registrations` muestra tabla mock y export CSV funciona en el navegador.
+- [ ] `/` carga sin error.
+- [ ] `/tournaments`, `/equipo`, `/tournaments/[slug]` funcionan.
+- [ ] `/admin` y subrutas cargan en el mismo origen (o en la URL de `NEXT_PUBLIC_ADMIN_APP_URL` si la definiste).
+
+---
+
+## Railway (alternativa u otro entorno)
+
+Misma app Next servida con `next start` tras `next build`.
+
+### Pasos
+
+1. En [Railway](https://railway.app): **New Project** → **Deploy from GitHub** → mismo repo.
+2. Railway (Nixpacks) detecta Node. En **Settings** del servicio verifica:
+   - **Build**: debe ejecutar `npm install` (o `npm ci`) y luego `npm run build`.
+   - **Start**: `npm run start` (Next escucha el puerto en `PORT` que Railway inyecta).
+3. **Generate Domain** (o dominio custom) en la pestaña **Networking**.
+4. Opcional: el repo incluye [`nixpacks.toml`](../nixpacks.toml) en la raíz para fijar Node 20 y la fase de build.
+
+### Nota
+
+No hay backend separado en este repo: Railway no sustituye una API; solo hospeda el mismo Next que en Vercel.
+
+---
+
+## Archivos de referencia en el repo
+
+- [`.env.example`](../.env.example) — variables públicas documentadas.
+- [`nixpacks.toml`](../nixpacks.toml) — ayuda a Railway/Nixpacks con Node 20 y build.
