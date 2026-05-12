@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TournamentRegisterForm } from "@/components/TournamentRegisterForm";
-import { getTournamentBySlug } from "@/lib/mock-data";
+import { getTournamentBySlug, displayCategoryName } from "@/lib/mock-data";
 import { effectiveCategoryFeeCents } from "@/lib/tournament-pricing";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -21,9 +21,7 @@ export default async function RegisterPage(props: Props) {
   const categoryLines = tournament.categories.map((c) => {
     const eff = effectiveCategoryFeeCents(c, tournament);
     const feeStr = eff != null ? formatMoney(eff) : "—";
-    const div = tournament.divisions.find((d) => d.id === c.divisionId);
-    const divPart = div?.label ? ` · ${div.label}` : "";
-    const agePart = c.ageLabel.trim() ? `${c.ageLabel.trim()} · ` : "";
+    const namePart = displayCategoryName(c, tournament.divisions);
     const subs =
       c.subdivisions.length > 0
         ? ` (${c.subdivisions
@@ -34,7 +32,7 @@ export default async function RegisterPage(props: Props) {
             )
             .join(", ")})`
         : "";
-    return `${agePart}${c.label}${divPart}${subs}: ${feeStr}`;
+    return `${namePart}${subs}: ${feeStr}`;
   });
 
   const registerPayload = {

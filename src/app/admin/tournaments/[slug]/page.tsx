@@ -19,6 +19,8 @@ import type { CategoryMock, TournamentMock, TournamentVenue } from "@/lib/mock-d
 import {
   registrationRows as seedRegistrationRows,
   tournaments as seedTournaments,
+  buildDefaultCategoryLabel,
+  displayCategoryName,
   formatRegistrationDivisionLabel,
   formatTournamentLocationsLine,
   normalizeTournament,
@@ -104,6 +106,7 @@ function categoryToDraft(c: CategoryMock) {
     label: c.label,
     ageLabel: c.ageLabel,
     divisionId: c.divisionId,
+    categoryTitleManual: c.categoryTitleManual ?? false,
     feeInput: centsToInput(c.feeCents),
     maxTeamsInput: c.maxTeams != null ? String(c.maxTeams) : "",
   };
@@ -148,10 +151,13 @@ function AdminTournamentDetailInner() {
     label: string;
     ageLabel: string;
     divisionId: string;
+    categoryTitleManual: boolean;
     feeInput: string;
     maxTeamsInput: string;
   } | null>(null);
   const [categorySaved, setCategorySaved] = useState(false);
+  const [editingCategoryTitle, setEditingCategoryTitle] = useState(false);
+  const [categoryTitleDraft, setCategoryTitleDraft] = useState("");
 
   useEffect(() => {
     if (!tournament) {
@@ -170,9 +176,11 @@ function AdminTournamentDetailInner() {
   useEffect(() => {
     if (!selectedCategory) {
       setCategoryDraft(null);
+      setEditingCategoryTitle(false);
       return;
     }
     setCategoryDraft(categoryToDraft(selectedCategory));
+    setEditingCategoryTitle(false);
   }, [selectedCategory]);
 
   const setCategoryQuery = useCallback(
@@ -220,9 +228,10 @@ function AdminTournamentDetailInner() {
     const firstDivId = nt.divisions[0]?.id ?? "div-general";
     const newCat: CategoryMock = {
       id: `admin-cat-${crypto.randomUUID()}`,
-      label: "Nueva categoría",
+      label: buildDefaultCategoryLabel("", firstDivId, nt.divisions),
       ageLabel: "",
       divisionId: firstDivId,
+      categoryTitleManual: false,
       feeCents: nt.registrationFeeCents,
       maxTeams: null,
       subdivisions: [],
@@ -307,21 +316,28 @@ function AdminTournamentDetailInner() {
         !Number.isNaN(n) && n >= 0 ? n : selectedCategory.maxTeams;
     }
 
-    const newLabel = categoryDraft.label.trim() || selectedCategory.label;
     const feeTrim = categoryDraft.feeInput.trim();
     const nextFeeCents =
       feeTrim === "" ? null : (feeParsed ?? selectedCategory.feeCents);
+
     const ageLabel = categoryDraft.ageLabel.trim();
     const divisionId =
       tournament.divisions.some((d) => d.id === categoryDraft.divisionId)
         ? categoryDraft.divisionId
         : (tournament.divisions[0]?.id ?? selectedCategory.divisionId);
 
+    const autoLabel = buildDefaultCategoryLabel(ageLabel, divisionId, tournament.divisions);
+    const finalLabel =
+      categoryDraft.categoryTitleManual && categoryDraft.label.trim()
+        ? categoryDraft.label.trim()
+        : autoLabel;
+
     const nextCat: CategoryMock = {
       ...selectedCategory,
-      label: newLabel,
+      label: finalLabel,
       ageLabel,
       divisionId,
+      categoryTitleManual: categoryDraft.categoryTitleManual,
       feeCents: nextFeeCents,
       maxTeams: nextMax,
     };
@@ -430,57 +446,116 @@ function AdminTournamentDetailInner() {
         </div>
 
         <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            Categoría: {selectedCategory.label}
-          </h2>
-          <p className="mt-1 text-xs text-zinc-500">
-            Editá nombre, edad, división del torneo, tarifa y cupo. Los cambios se guardan en este navegador
+          <div className="mb-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+              Categoría
+            </p>
+            {editingCategoryTitle ? (
+              <input
+                type="text"
+                autoFocus
+                value={categoryTitleDraft}
+                onChange={(e) => setCategoryTitleDraft(e.target.value)}
+                onBlur={() => {
+                  if (!categoryDraft) return;
+                  const auto = buildDefaultCategoryLabel(
+                    categoryDraft.ageLabel,
+                    categoryDraft.divisionId,
+                    tournament.divisions,
+                  );
+                  const draft = categoryTitleDraft.trim();
+                  if (!draft || draft === auto) {
+                    setCategoryDraft((d) =>
+                      d ? { ...d, label: auto, categoryTitleManual: false } : d,
+                    );
+                  } else {
+                    setCategoryDraft((d) =>
+                      d ? { ...d, label: draft, categoryTitleManual: true } : d,
+                    );
+                  }
+                  setEditingCategoryTitle(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    (e.target as HTMLInputElement).blur();
+                  }
+                  if (e.key === "Escape") setEditingCategoryTitle(false);
+                }}
+                className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-lg font-semibold text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+            ) : (
+              <button
+                type="button"
+                title="Doble clic para editar el nombre (no cambia edad ni división)"
+                onDoubleClick={() => {
+                  setCategoryTitleDraft(
+                    displayCategoryName(selectedCategory, tournament.divisions),
+                  );
+                  setEditingCategoryTitle(true);
+                }}
+                className="mt-1 block w-full truncate text-left text-lg font-semibold text-zinc-900 dark:text-zinc-50"
+              >
+                {displayCategoryName(selectedCategory, tournament.divisions)}
+              </button>
+            )}
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Nombre = edad + división. Doble clic para un título distinto. Guardá abajo.
+            </p>
+          </div>
+          <p className="mb-6 text-xs text-zinc-500">
+            Edad, división del torneo, tarifa y cupo. Los cambios se guardan en este navegador
             (localStorage).
           </p>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <label className="block text-sm">
               <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                Nombre
-              </span>
-              <input
-                type="text"
-                value={categoryDraft.label}
-                onChange={(e) =>
-                  setCategoryDraft((d) =>
-                    d ? { ...d, label: e.target.value } : d,
-                  )
-                }
-                className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                Edad o grupo
+                Edad
               </span>
               <input
                 type="text"
                 value={categoryDraft.ageLabel}
-                onChange={(e) =>
-                  setCategoryDraft((d) =>
-                    d ? { ...d, ageLabel: e.target.value } : d,
-                  )
-                }
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCategoryDraft((d) => {
+                    if (!d) return d;
+                    const next = { ...d, ageLabel: v };
+                    if (!d.categoryTitleManual) {
+                      next.label = buildDefaultCategoryLabel(
+                        v,
+                        d.divisionId,
+                        tournament.divisions,
+                      );
+                    }
+                    return next;
+                  });
+                }}
                 placeholder="Ej. 14U"
                 className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
               />
             </label>
-            <label className="block text-sm sm:col-span-2">
+            <label className="block text-sm sm:col-span-2 sm:max-w-md">
               <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                División del torneo
+                División del torneo (grupo)
               </span>
               <select
                 value={categoryDraft.divisionId}
-                onChange={(e) =>
-                  setCategoryDraft((d) =>
-                    d ? { ...d, divisionId: e.target.value } : d,
-                  )
-                }
-                className="mt-1 w-full max-w-md rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCategoryDraft((d) => {
+                    if (!d) return d;
+                    const next = { ...d, divisionId: v };
+                    if (!d.categoryTitleManual) {
+                      next.label = buildDefaultCategoryLabel(
+                        d.ageLabel,
+                        v,
+                        tournament.divisions,
+                      );
+                    }
+                    return next;
+                  });
+                }}
+                className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
               >
                 {tournament.divisions.map((d) => (
                   <option key={d.id} value={d.id}>
@@ -541,7 +616,8 @@ function AdminTournamentDetailInner() {
 
         <section>
           <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            Inscripciones — {selectedCategory.label}
+            Inscripciones —{" "}
+            {displayCategoryName(selectedCategory, tournament.divisions)}
           </h3>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
             Solo equipos inscritos en esta categoría.
@@ -990,7 +1066,11 @@ function AdminTournamentDetailInner() {
           {tournament.categories.map((c) => {
             const eff = effectiveCategoryFeeCents(c, tournament);
             const div = tournament.divisions.find((d) => d.id === c.divisionId);
-            const meta = [c.ageLabel?.trim(), div?.label].filter(Boolean).join(" · ");
+            const meta =
+              c.categoryTitleManual && c.label.trim()
+                ? [c.ageLabel?.trim(), div?.label].filter(Boolean).join(" · ")
+                : null;
+            const title = displayCategoryName(c, tournament.divisions);
             return (
               <li key={c.id} className="px-0">
                 <button
@@ -1000,7 +1080,7 @@ function AdminTournamentDetailInner() {
                 >
                   <span className="min-w-0 flex-1">
                     <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-                      {c.label}
+                      {title}
                     </span>
                     {meta ? (
                       <span className="mt-0.5 block text-xs font-normal text-zinc-500">

@@ -5,6 +5,7 @@ import {
   type CategoryMock,
   type RegistrationRowMock,
   type TournamentMock,
+  displayCategoryName,
   formatRegistrationDivisionLabel,
 } from "@/lib/mock-data";
 import { appendStoredRegistration } from "@/lib/local-registrations";
@@ -207,7 +208,7 @@ export function TournamentRegisterForm({
         >
           {tournament.categories.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.label}
+              {displayCategoryName(c, tournament.divisions)}
             </option>
           ))}
         </select>

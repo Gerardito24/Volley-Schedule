@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { PublicTournamentSchedule } from "@/components/PublicTournamentSchedule";
-import { getTournamentBySlug, formatTournamentLocationsLine } from "@/lib/mock-data";
+import { getTournamentBySlug, formatTournamentLocationsLine, displayCategoryName } from "@/lib/mock-data";
 import { effectiveCategoryFeeCents } from "@/lib/tournament-pricing";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -75,13 +75,17 @@ export default async function TournamentDetailPage(props: Props) {
         <ul className="mt-4 divide-y divide-zinc-200 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
           {tournament.categories.map((c) => {
             const eff = effectiveCategoryFeeCents(c, tournament);
+            const title = displayCategoryName(c, tournament.divisions);
             const div = tournament.divisions.find((d) => d.id === c.divisionId);
-            const meta = [c.ageLabel?.trim(), div?.label].filter(Boolean).join(" · ");
+            const meta =
+              c.categoryTitleManual && c.label.trim()
+                ? [c.ageLabel?.trim(), div?.label].filter(Boolean).join(" · ")
+                : null;
             return (
               <li key={c.id} className="px-4 py-4 text-sm">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-                    {c.label}
+                    {title}
                   </span>
                   <span className="text-zinc-600 dark:text-zinc-400">
                     {eff != null ? formatMoney(eff) : "—"}

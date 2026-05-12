@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { CategoryMock, RegistrationRowMock, TournamentMock } from "@/lib/mock-data";
-import { registrationRows as seedRegistrationRows } from "@/lib/mock-data";
+import { displayCategoryName, registrationRows as seedRegistrationRows } from "@/lib/mock-data";
 import {
   LOCAL_REGISTRATIONS_KEY,
   readStoredRegistrations,
@@ -532,7 +532,7 @@ export function TournamentSchedulePanel({
           >
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.label}
+                {displayCategoryName(c, tournament.divisions)}
               </option>
             ))}
           </select>

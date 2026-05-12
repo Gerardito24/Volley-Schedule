@@ -6,7 +6,7 @@ import { useMemo, useRef, useState } from "react";
 import { appendStoredTournament, readStoredTournaments } from "@/lib/local-tournaments";
 import { mergeAdminTournaments } from "@/lib/merge-tournaments";
 import type { CategoryMock, TournamentMock } from "@/lib/mock-data";
-import { tournaments as seedTournaments } from "@/lib/mock-data";
+import { buildDefaultCategoryLabel, tournaments as seedTournaments } from "@/lib/mock-data";
 import { slugify } from "@/lib/slugify";
 const PROMO_MAX_BYTES = 400 * 1024;
 
@@ -27,7 +27,9 @@ type CategoryFormRow = {
   key: string;
   ageLabel: string;
   divisionId: string;
+  /** Título mostrado; si `labelManual` es false, se iguala al auto desde edad+división. */
   label: string;
+  labelManual: boolean;
   feeUsd: string;
   maxTeams: string;
   subdivisions: SubdivisionFormRow[];
@@ -85,48 +87,79 @@ export function NewTournamentForm() {
       key: crypto.randomUUID(),
       ageLabel: "",
       divisionId: initialFirstDivision.key,
-      label: "",
+      label: buildDefaultCategoryLabel("", initialFirstDivision.key, [
+        { id: initialFirstDivision.key, label: initialFirstDivision.label },
+      ]),
+      labelManual: false,
       feeUsd: "",
       maxTeams: "",
       subdivisions: [],
     },
   ]);
 
+  const [editingTitleKey, setEditingTitleKey] = useState<string | null>(null);
+  const [titleEditDraft, setTitleEditDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  function divisionPairs() {
+    return tournamentDivisions.map((d) => ({ id: d.key, label: d.label }));
+  }
 
   function addDivision() {
     setTournamentDivisions((rows) => [...rows, { key: crypto.randomUUID(), label: "" }]);
   }
 
-  function removeDivision(key: string) {
+  function removeDivision(divKey: string) {
     setTournamentDivisions((rows) => {
       if (rows.length <= 1) return rows;
-      const next = rows.filter((r) => r.key !== key);
+      const next = rows.filter((r) => r.key !== divKey);
       const fallback = next[0]!.key;
+      const divs = next.map((d) => ({ id: d.key, label: d.label }));
+      setCategories((cats) =>
+        cats.map((c) => {
+          let divisionId = c.divisionId === divKey ? fallback : c.divisionId;
+          if (!next.some((r) => r.key === divisionId)) divisionId = fallback;
+          const base = { ...c, divisionId };
+          if (base.labelManual) return base;
+          return {
+            ...base,
+            label: buildDefaultCategoryLabel(base.ageLabel, divisionId, divs),
+          };
+        }),
+      );
+      return next;
+    });
+  }
+
+  function updateDivisionRow(divKey: string, label: string) {
+    setTournamentDivisions((rows) => {
+      const next = rows.map((r) => (r.key === divKey ? { ...r, label } : r));
+      const divs = next.map((d) => ({ id: d.key, label: d.label }));
       setCategories((cats) =>
         cats.map((c) =>
-          c.divisionId === key ? { ...c, divisionId: fallback } : c,
+          c.labelManual
+            ? c
+            : {
+                ...c,
+                label: buildDefaultCategoryLabel(c.ageLabel, c.divisionId, divs),
+              },
         ),
       );
       return next;
     });
   }
 
-  function updateDivision(key: string, label: string) {
-    setTournamentDivisions((rows) =>
-      rows.map((r) => (r.key === key ? { ...r, label } : r)),
-    );
-  }
-
   function addCategory() {
     const firstId = tournamentDivisions[0]?.key ?? "";
+    const divs = divisionPairs();
     setCategories((rows) => [
       ...rows,
       {
         key: crypto.randomUUID(),
         ageLabel: "",
         divisionId: firstId,
-        label: "",
+        label: buildDefaultCategoryLabel("", firstId, divs),
+        labelManual: false,
         feeUsd: "",
         maxTeams: "",
         subdivisions: [],
@@ -135,13 +168,50 @@ export function NewTournamentForm() {
   }
 
   function removeCategory(key: string) {
+    if (editingTitleKey === key) setEditingTitleKey(null);
     setCategories((rows) => (rows.length <= 1 ? rows : rows.filter((r) => r.key !== key)));
   }
 
+  function categoryDisplayTitle(row: CategoryFormRow): string {
+    const divs = divisionPairs();
+    if (row.labelManual && row.label.trim()) return row.label.trim();
+    return buildDefaultCategoryLabel(row.ageLabel, row.divisionId, divs);
+  }
+
+  function startTitleEdit(row: CategoryFormRow) {
+    setEditingTitleKey(row.key);
+    setTitleEditDraft(categoryDisplayTitle(row));
+  }
+
+  function commitTitleEdit(row: CategoryFormRow) {
+    const divs = divisionPairs();
+    const auto = buildDefaultCategoryLabel(row.ageLabel, row.divisionId, divs);
+    const draft = titleEditDraft.trim();
+    if (!draft || draft === auto) {
+      updateCategory(row.key, { label: auto, labelManual: false });
+    } else {
+      updateCategory(row.key, { label: draft, labelManual: true });
+    }
+    setEditingTitleKey(null);
+  }
+
   function updateCategory(key: string, patch: Partial<CategoryFormRow>) {
-    setCategories((rows) =>
-      rows.map((r) => (r.key === key ? { ...r, ...patch } : r)),
-    );
+    setCategories((rows) => {
+      const divs = divisionPairs();
+      return rows.map((r) => {
+        if (r.key !== key) return r;
+        let next = { ...r, ...patch };
+        const affectsAuto =
+          "ageLabel" in patch || "divisionId" in patch;
+        if (affectsAuto && !next.labelManual) {
+          next = {
+            ...next,
+            label: buildDefaultCategoryLabel(next.ageLabel, next.divisionId, divs),
+          };
+        }
+        return next;
+      });
+    });
   }
 
   function addSubdivision(catKey: string) {
@@ -268,15 +338,11 @@ export function NewTournamentForm() {
     for (let i = 0; i < categories.length; i++) {
       const row = categories[i];
       if (!row.ageLabel.trim()) {
-        setError(`Categoría ${i + 1}: indica la edad o grupo (ej. 14U), o elegí una sugerencia.`);
+        setError(`Categoría ${i + 1}: indica la edad (ej. 14U) o elegí una sugerencia.`);
         return;
       }
       if (!row.divisionId || !divisionIds.has(row.divisionId)) {
         setError(`Categoría ${i + 1}: elegí una división del torneo.`);
-        return;
-      }
-      if (!row.label.trim()) {
-        setError(`Categoría ${i + 1}: indica un nombre.`);
         return;
       }
 
@@ -344,11 +410,20 @@ export function NewTournamentForm() {
         maxTeams = sumSubCaps;
       }
 
+      const autoLabel = buildDefaultCategoryLabel(
+        row.ageLabel,
+        row.divisionId,
+        divisionsPayload,
+      );
+      const finalLabel =
+        row.labelManual && row.label.trim() ? row.label.trim() : autoLabel;
+
       categoryPayload.push({
         id: `local-cat-${crypto.randomUUID()}`,
-        label: row.label.trim(),
+        label: finalLabel,
         ageLabel: row.ageLabel.trim(),
         divisionId: row.divisionId,
+        categoryTitleManual: row.labelManual,
         feeCents: catFee,
         maxTeams,
         subdivisions: subs,
@@ -599,7 +674,7 @@ export function NewTournamentForm() {
               <input
                 type="text"
                 value={div.label}
-                onChange={(e) => updateDivision(div.key, e.target.value)}
+                onChange={(e) => updateDivisionRow(div.key, e.target.value)}
                 placeholder="Nombre de la división"
                 className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
               />
@@ -631,7 +706,7 @@ export function NewTournamentForm() {
           </button>
         </div>
         <ul className="space-y-4">
-          {categories.map((row, idx) => {
+          {categories.map((row) => {
             const multiDiv = row.subdivisions.length > 1;
             const subCapSum = multiDiv
               ? row.subdivisions.reduce((acc, s) => {
@@ -646,14 +721,44 @@ export function NewTournamentForm() {
               className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700"
             >
               <div className="mb-3 flex items-center justify-between gap-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                  Categoría {idx + 1}
-                </span>
+                <div className="min-w-0 flex-1">
+                  {editingTitleKey === row.key ? (
+                    <input
+                      type="text"
+                      autoFocus
+                      value={titleEditDraft}
+                      onChange={(e) => setTitleEditDraft(e.target.value)}
+                      onBlur={() => commitTitleEdit(row)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          (e.target as HTMLInputElement).blur();
+                        }
+                        if (e.key === "Escape") {
+                          setEditingTitleKey(null);
+                        }
+                      }}
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-base font-semibold text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      title="Doble clic para editar el nombre (no cambia edad ni división)"
+                      onDoubleClick={() => startTitleEdit(row)}
+                      className="block w-full truncate text-left text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100"
+                    >
+                      {categoryDisplayTitle(row)}
+                    </button>
+                  )}
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    Nombre = edad + división. Doble clic para un nombre distinto.
+                  </p>
+                </div>
                 {categories.length > 1 ? (
                   <button
                     type="button"
                     onClick={() => removeCategory(row.key)}
-                    className="text-xs text-red-600 hover:underline dark:text-red-400"
+                    className="shrink-0 text-xs text-red-600 hover:underline dark:text-red-400"
                   >
                     Quitar categoría
                   </button>
@@ -662,7 +767,7 @@ export function NewTournamentForm() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Edad o grupo
+                    Edad
                   </label>
                   <input
                     list={`age-dl-${row.key}`}
@@ -670,7 +775,7 @@ export function NewTournamentForm() {
                     onChange={(e) =>
                       updateCategory(row.key, { ageLabel: e.target.value })
                     }
-                    placeholder="Ej. 14U o Open"
+                    placeholder="Ej. 14U"
                     className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
                   />
                   <datalist id={`age-dl-${row.key}`}>
@@ -681,7 +786,7 @@ export function NewTournamentForm() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    División del torneo
+                    División del torneo (grupo)
                   </label>
                   <select
                     value={row.divisionId}
@@ -696,18 +801,6 @@ export function NewTournamentForm() {
                       </option>
                     ))}
                   </select>
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Nombre de la categoría
-                  </label>
-                  <input
-                    value={row.label}
-                    onChange={(e) =>
-                      updateCategory(row.key, { label: e.target.value })
-                    }
-                    className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">

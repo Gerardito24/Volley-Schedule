@@ -207,11 +207,14 @@ function isCategoryMock(value: unknown): value is CategoryMock {
   const o = value as Record<string, unknown>;
   const ageOk = o.ageLabel === undefined || typeof o.ageLabel === "string";
   const divIdOk = o.divisionId === undefined || typeof o.divisionId === "string";
+  const titleManualOk =
+    o.categoryTitleManual === undefined || typeof o.categoryTitleManual === "boolean";
   if (
     typeof o.id !== "string" ||
     typeof o.label !== "string" ||
     !ageOk ||
     !divIdOk ||
+    !titleManualOk ||
     !(o.feeCents === null || typeof o.feeCents === "number") ||
     !(o.maxTeams === null || typeof o.maxTeams === "number") ||
     !Array.isArray(o.subdivisions)

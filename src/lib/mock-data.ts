@@ -17,11 +17,14 @@ export type TournamentDivisionMock = {
 
 export type CategoryMock = {
   id: string;
+  /** Nombre mostrado / en listados; por defecto deriva de edad + división si `categoryTitleManual` es false. */
   label: string;
-  /** Edad o grupo (ej. 14U, Open); texto libre o elegido de sugerencias. */
+  /** Solo edad o bracket (ej. 14U); el grupo es la división del torneo. */
   ageLabel: string;
   /** Una de `TournamentMock.divisions`. */
   divisionId: string;
+  /** Si true, `label` fue fijado a mano (doble clic) y no se recalcula al cambiar edad/división. */
+  categoryTitleManual?: boolean;
   feeCents: number | null;
   maxTeams: number | null;
   subdivisions: SubdivisionMock[];
@@ -147,7 +150,7 @@ export const tournaments: TournamentMock[] = [
     categories: [
       {
         id: "d4",
-        label: "12U",
+        label: "12U · Premier",
         ageLabel: "12U",
         divisionId: "div-p5c-main",
         feeCents: 20000,
@@ -156,7 +159,7 @@ export const tournaments: TournamentMock[] = [
       },
       {
         id: "d5",
-        label: "18U",
+        label: "18U · Premier",
         ageLabel: "18U",
         divisionId: "div-p5c-main",
         feeCents: 29000,
@@ -172,7 +175,7 @@ export const registrationRows: RegistrationRowMock[] = [
     id: "r1",
     tournamentSlug: "copa-30-summer-2026",
     tournamentName: "Copa 30 Summer",
-    divisionLabel: "16U · Masculino · 16U Masculino",
+    divisionLabel: "16U · Masculino",
     teamName: "Las Piedras VC 16U",
     clubName: "Las Piedras VC",
     status: "paid",
@@ -186,7 +189,7 @@ export const registrationRows: RegistrationRowMock[] = [
     id: "r2",
     tournamentSlug: "copa-30-summer-2026",
     tournamentName: "Copa 30 Summer",
-    divisionLabel: "14U · Femenino · 14U Femenino",
+    divisionLabel: "14U · Femenino",
     teamName: "Metro VB 14U",
     clubName: "Metro VB",
     status: "approved",
@@ -200,7 +203,7 @@ export const registrationRows: RegistrationRowMock[] = [
     id: "r4",
     tournamentSlug: "copa-30-summer-2026",
     tournamentName: "Copa 30 Summer",
-    divisionLabel: "14U · Femenino · 14U Femenino",
+    divisionLabel: "14U · Femenino",
     teamName: "Bayamón Youth 14U",
     clubName: "Bayamón Youth",
     status: "paid",
@@ -214,7 +217,7 @@ export const registrationRows: RegistrationRowMock[] = [
     id: "r3",
     tournamentSlug: "premier-5c-2026",
     tournamentName: "Premier 5C",
-    divisionLabel: "18U · Premier · 18U",
+    divisionLabel: "18U · Premier",
     teamName: "Oeste Elite 18U",
     clubName: "Oeste Elite",
     status: "under_review",
@@ -248,6 +251,32 @@ export function formatTournamentLocationsLine(t: TournamentMock): string {
   return list.length ? list.join(" · ") : "—";
 }
 
+/** Título por defecto: `edad · nombre división` (la división del torneo es el grupo). */
+export function buildDefaultCategoryLabel(
+  ageLabel: string,
+  divisionId: string,
+  divisions: { id: string; label: string }[],
+): string {
+  const age = ageLabel.trim();
+  const d = divisions.find((x) => x.id === divisionId);
+  const dlab = (d?.label ?? "").trim();
+  if (age && dlab) return `${age} · ${dlab}`;
+  if (age) return age;
+  if (dlab) return dlab;
+  return "Categoría";
+}
+
+/** Nombre visible de la categoría (manual o automático). */
+export function displayCategoryName(
+  category: CategoryMock,
+  divisions: { id: string; label: string }[],
+): string {
+  if (category.categoryTitleManual && category.label.trim()) {
+    return category.label.trim();
+  }
+  return buildDefaultCategoryLabel(category.ageLabel, category.divisionId, divisions);
+}
+
 const DEFAULT_DIVISION_ID = "div-general";
 
 function inferAgeLabelFromCategoryLabel(catLabel: string): string {
@@ -271,7 +300,9 @@ export function formatRegistrationDivisionLabel(
   const parts: string[] = [];
   if (age) parts.push(age);
   if (divLabel) parts.push(divLabel);
-  if (category.label.trim()) parts.push(category.label.trim());
+  if (category.categoryTitleManual && category.label.trim()) {
+    parts.push(category.label.trim());
+  }
   let s = parts.join(" · ") || category.label.trim() || "—";
   if (subdivisionId) {
     const sub = category.subdivisions.find((x) => x.id === subdivisionId);
@@ -340,7 +371,11 @@ export function normalizeTournament(t: TournamentMock): TournamentMock {
   const defaultDivId = divisions[0]!.id;
 
   const categories = (t.categories ?? []).map((c) => {
-    const cx = c as unknown as { ageLabel?: unknown; divisionId?: unknown };
+    const cx = c as unknown as {
+      ageLabel?: unknown;
+      divisionId?: unknown;
+      categoryTitleManual?: unknown;
+    };
     let ageLabel = typeof cx.ageLabel === "string" ? cx.ageLabel.trim() : "";
     let divisionId = typeof cx.divisionId === "string" ? cx.divisionId.trim() : "";
     if (!divIds.has(divisionId)) divisionId = defaultDivId;
@@ -348,7 +383,9 @@ export function normalizeTournament(t: TournamentMock): TournamentMock {
       const inferred = inferAgeLabelFromCategoryLabel(c.label);
       if (inferred) ageLabel = inferred;
     }
-    return { ...c, ageLabel, divisionId };
+    const categoryTitleManual =
+      typeof cx.categoryTitleManual === "boolean" ? cx.categoryTitleManual : false;
+    return { ...c, ageLabel, divisionId, categoryTitleManual };
   });
 
   const label = venues.map((v) => v.label).join(" · ");
