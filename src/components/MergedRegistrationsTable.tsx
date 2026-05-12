@@ -13,11 +13,14 @@ export function MergedRegistrationsTable({
   tournamentSlug,
   categoryId,
   hideTournamentColumn,
+  registrationTools = true,
 }: {
   tournamentSlug?: string;
   /** Si se pasa, solo filas de esa categoría (`categoryId` en mock). */
   categoryId?: string;
   hideTournamentColumn?: boolean;
+  /** Hoja de inscripción, PDF por fila, doble clic en celdas (solo admin). */
+  registrationTools?: boolean;
 }) {
   const [revision, setRevision] = useState(0);
 
@@ -53,6 +56,7 @@ export function MergedRegistrationsTable({
       rows={rows}
       hideTournamentColumn={hideTournamentColumn}
       allowLocalStatusEdit
+      registrationTools={registrationTools}
     />
   );
 }

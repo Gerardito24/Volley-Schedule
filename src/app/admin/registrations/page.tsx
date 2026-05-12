@@ -9,7 +9,9 @@ export default function AdminRegistrationsPage() {
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           Panel para organizadores. Incluye filas guardadas en este navegador
-          además del demo. En producción: restringir por rol{" "}
+          además del demo. <strong>Abrir</strong> muestra la hoja de inscripción;
+          <strong> PDF</strong> por fila; doble clic en celdas para editar. En
+          producción: restringir por rol{" "}
           <code className="rounded bg-zinc-200 px-1 dark:bg-zinc-800">organizer</code> vía
           Supabase y middleware.
         </p>

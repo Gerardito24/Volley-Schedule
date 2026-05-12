@@ -1,8 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { CategoryMock, TournamentMock } from "@/lib/mock-data";
+import type {
+  CategoryMock,
+  RegistrationRowMock,
+  TournamentMock,
+} from "@/lib/mock-data";
 import { appendStoredRegistration } from "@/lib/local-registrations";
+import { downloadRegistrationPdf } from "@/lib/registrationPdf";
 import { effectiveCategoryFeeCents } from "@/lib/tournament-pricing";
 
 export type RegisterTournamentPayload = Pick<
@@ -35,6 +40,9 @@ export function TournamentRegisterForm({
   const [teamName, setTeamName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [lastCreated, setLastCreated] = useState<RegistrationRowMock | null>(
+    null,
+  );
 
   const category = useMemo(
     () => tournament.categories.find((c) => c.id === categoryId),
@@ -71,7 +79,7 @@ export function TournamentRegisterForm({
     const divisionLabel = buildDivisionLabel(category, subId);
     const fee = feeCents ?? 0;
 
-    appendStoredRegistration({
+    const row: RegistrationRowMock = {
       id: `local-reg-${crypto.randomUUID()}`,
       tournamentSlug: tournament.slug,
       tournamentName: tournament.name,
@@ -83,7 +91,10 @@ export function TournamentRegisterForm({
       registeredAt: now,
       categoryId: category.id,
       subdivisionId: subId,
-    });
+    };
+
+    appendStoredRegistration(row);
+    setLastCreated(row);
 
     setDone(true);
     setTeamName("");
@@ -98,9 +109,26 @@ export function TournamentRegisterForm({
           <strong>pagada</strong> o <strong>aprobada</strong>, el equipo podrá
           entrar automáticamente en la lista de seeds del itinerario.
         </p>
+        {lastCreated ? (
+          <div className="mt-4 rounded-lg border border-emerald-300/60 bg-white/80 p-4 dark:border-emerald-800 dark:bg-zinc-950/60">
+            <p className="font-medium text-emerald-950 dark:text-emerald-100">
+              Descargá la hoja de inscripción en PDF
+            </p>
+            <button
+              type="button"
+              onClick={() => downloadRegistrationPdf(lastCreated)}
+              className="mt-3 rounded-full border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+            >
+              Exportar PDF
+            </button>
+          </div>
+        ) : null}
         <button
           type="button"
-          onClick={() => setDone(false)}
+          onClick={() => {
+            setDone(false);
+            setLastCreated(null);
+          }}
           className="mt-4 text-sm font-medium text-emerald-800 underline dark:text-emerald-200"
         >
           Inscribir otro equipo
