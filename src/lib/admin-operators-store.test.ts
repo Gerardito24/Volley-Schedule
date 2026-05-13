@@ -65,6 +65,19 @@ describe("admin-operators-store", () => {
     expect(b.ok).toBe(false);
   });
 
+  it("createItMaster rejects invalid organizer email", async () => {
+    const { createItMaster } = await import("@/lib/admin-operators-store");
+    const r = createItMaster("u", "secret12", "not-an-email");
+    expect(r.ok).toBe(false);
+  });
+
+  it("createItMaster stores organizer email when valid", async () => {
+    const { createItMaster, readOperators } = await import("@/lib/admin-operators-store");
+    const a = createItMaster("u", "secret12", "org@example.com");
+    expect(a.ok).toBe(true);
+    expect(readOperators()[0]!.organizerEmail).toBe("org@example.com");
+  });
+
   it("tryLogin succeeds with correct password", async () => {
     const { createItMaster, tryLogin } = await import("@/lib/admin-operators-store");
     createItMaster("u1", "pass1234");

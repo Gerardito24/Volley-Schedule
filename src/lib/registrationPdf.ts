@@ -18,8 +18,14 @@ function formatMoney(cents: number) {
   }).format(cents / 100);
 }
 
-/** Genera y descarga un PDF de la hoja de inscripción (una fila). */
-export function downloadRegistrationPdf(row: RegistrationRowMock): void {
+/** Nombre de archivo seguro para adjuntos / descarga. */
+export function registrationPdfFilename(row: RegistrationRowMock): string {
+  const safeTeam = row.teamName.replace(/[^\w\-]+/g, "-").slice(0, 24);
+  return `inscripcion-${safeTeam}-${row.id}.pdf`;
+}
+
+/** Construye el documento PDF en memoria (misma maquetación que la descarga). */
+export function buildRegistrationPdfJsDoc(row: RegistrationRowMock): jsPDF {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   let y = 18;
   const left = 14;
@@ -72,6 +78,30 @@ export function downloadRegistrationPdf(row: RegistrationRowMock): void {
     y,
   );
 
-  const safeTeam = row.teamName.replace(/[^\w\-]+/g, "-").slice(0, 24);
-  doc.save(`inscripcion-${safeTeam}-${row.id}.pdf`);
+  return doc;
+}
+
+/** PDF como `Blob` (p. ej. adjunto o `fetch`). */
+export function registrationPdfToBlob(row: RegistrationRowMock): Blob {
+  const doc = buildRegistrationPdfJsDoc(row);
+  return doc.output("blob");
+}
+
+/** Base64 sin prefijo `data:...` (para enviar al API). */
+export function registrationPdfToBase64(row: RegistrationRowMock): string {
+  const doc = buildRegistrationPdfJsDoc(row);
+  const dataUri = doc.output("datauristring");
+  const comma = dataUri.indexOf(",");
+  return comma >= 0 ? dataUri.slice(comma + 1) : dataUri;
+}
+
+/** Genera y descarga un PDF de la hoja de inscripción (una fila). */
+export function downloadRegistrationPdf(row: RegistrationRowMock): void {
+  const doc = buildRegistrationPdfJsDoc(row);
+  const url = URL.createObjectURL(doc.output("blob"));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = registrationPdfFilename(row);
+  a.click();
+  URL.revokeObjectURL(url);
 }

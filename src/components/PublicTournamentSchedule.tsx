@@ -2,18 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { mergeAdminTournaments } from "@/lib/merge-tournaments";
-import { readStoredTournaments } from "@/lib/local-tournaments";
+import { readStoredTournaments, VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED } from "@/lib/local-tournaments";
 import type { TournamentMock } from "@/lib/mock-data";
 import { tournaments as seedTournaments } from "@/lib/mock-data";
-import { buildMatchOrderIndex, formatMatchSide } from "@/lib/schedule-display";
 import type { CategoryScheduleMock } from "@/lib/schedule-types";
+import { resolveSideToTeamLabel } from "@/lib/schedule-results";
 
 type Props = { slug: string };
 
 function categoryScheduleRows(cs: CategoryScheduleMock) {
-  const matchIndexById = buildMatchOrderIndex(
-    cs.phases.flatMap((p) => p.matches),
-  );
   const rows: {
     phase: string;
     round: number;
@@ -33,13 +30,14 @@ function categoryScheduleRows(cs: CategoryScheduleMock) {
             : ph.templateId;
 
     for (const m of ph.matches) {
-      const home = formatMatchSide(m.home, cs.teamLabels, matchIndexById);
-      const away = formatMatchSide(m.away, cs.teamLabels, matchIndexById);
+      const home = resolveSideToTeamLabel(m.home, cs);
+      const away = resolveSideToTeamLabel(m.away, cs);
       const as = cs.assignments[m.id];
+      const score = m.result ? ` (${m.result.home}–${m.result.away})` : "";
       rows.push({
         phase: phaseLabel,
         round: m.round + 1,
-        label: `${home} vs ${away}`,
+        label: `${home} vs ${away}${score}`,
         starts: as?.startsAt,
         court: as?.courtLabel,
       });
@@ -55,8 +53,13 @@ export function PublicTournamentSchedule({ slug }: Props) {
   );
 
   useEffect(() => {
-    const merged = mergeAdminTournaments(seedTournaments, readStoredTournaments());
-    setTournament(merged.find((t) => t.slug === slug));
+    function load() {
+      const merged = mergeAdminTournaments(seedTournaments, readStoredTournaments());
+      setTournament(merged.find((t) => t.slug === slug));
+    }
+    load();
+    window.addEventListener(VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED, load);
+    return () => window.removeEventListener(VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED, load);
   }, [slug]);
 
   const schedule = tournament?.schedule;

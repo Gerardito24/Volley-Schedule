@@ -10,6 +10,13 @@ export type MatchSideRef =
   | { type: "poolStanding"; poolId: string; place: number }
   | { type: "bye" };
 
+export type ScheduleMatchResultMock = {
+  home: number;
+  away: number;
+  /** ISO 8601 */
+  recordedAt: string;
+};
+
 export type ScheduleMatchMock = {
   id: string;
   phaseId: string;
@@ -17,6 +24,8 @@ export type ScheduleMatchMock = {
   orderInRound: number;
   home: MatchSideRef;
   away: MatchSideRef;
+  /** Marcador registrado en vivo (MVP: solo fases bracket / single_elim). */
+  result?: ScheduleMatchResultMock;
 };
 
 export type SchedulePoolMock = {

@@ -11,9 +11,10 @@ export default function EquipoPage() {
           Registro de club
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Mismo flujo en dos pasos que la inscripción a torneo: checklist y formulario completo con roster, firma y
-          términos. Al enviar, se guarda el perfil del club y una inscripción interna para que el organizador vea el
-          equipo en{" "}
+          Tres pasos: checklist, formulario completo (roster, firma, términos) y un último paso donde indicas el correo
+          para la constancia. Al pulsar &quot;Guardar registro&quot; se guardan el perfil del club y la inscripción
+          interna, y se intenta enviar el PDF a ese correo (requiere configurar Resend en el servidor). El equipo
+          aparece en{" "}
           <Link
             href="/admin/equipos"
             className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"

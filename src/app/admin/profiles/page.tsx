@@ -51,6 +51,7 @@ export default function AdminProfilesPage() {
   const [ePos, setEPos] = useState("");
   const [eUser, setEUser] = useState("");
   const [ePass, setEPass] = useState("");
+  const [eOrgEmail, setEOrgEmail] = useState("");
 
   if (!actor) {
     return (
@@ -64,6 +65,7 @@ export default function AdminProfilesPage() {
     setEPos(p.position);
     setEUser(p.username);
     setEPass("");
+    setEOrgEmail(p.organizerEmail ?? "");
     setError(null);
   }
 
@@ -74,7 +76,7 @@ export default function AdminProfilesPage() {
     if (!a || !editId) return;
     const patch =
       editId === IT_MASTER_PROFILE_ID
-        ? { username: eUser, password: ePass || undefined }
+        ? { username: eUser, password: ePass || undefined, organizerEmail: eOrgEmail }
         : {
             displayName: eName,
             position: ePos,
@@ -226,6 +228,7 @@ export default function AdminProfilesPage() {
               <th className="px-4 py-3">Nombre</th>
               <th className="px-4 py-3">Posición</th>
               <th className="px-4 py-3">Usuario</th>
+              <th className="px-4 py-3">Correo copia</th>
               <th className="px-4 py-3">Tipo</th>
               <th className="px-4 py-3 text-right">Acciones</th>
             </tr>
@@ -250,6 +253,9 @@ export default function AdminProfilesPage() {
                   </td>
                   <td className="px-4 py-3 text-zinc-600">{isIt ? IT_MASTER_POSITION : p.position}</td>
                   <td className="px-4 py-3 text-zinc-600">{p.username}</td>
+                  <td className="max-w-[200px] truncate px-4 py-3 text-xs text-zinc-500" title={p.organizerEmail ?? ""}>
+                    {isIt ? p.organizerEmail ?? "—" : "—"}
+                  </td>
                   <td className="px-4 py-3 text-zinc-600">
                     {p.role === "it_master" ? "IT maestro" : "Administrador"}
                   </td>
@@ -318,6 +324,25 @@ export default function AdminProfilesPage() {
                     />
                   </div>
                 </>
+              ) : null}
+              {editId === IT_MASTER_PROFILE_ID ? (
+                <div>
+                  <label className="text-xs font-semibold text-zinc-600">
+                    Correo del organizador (constancias / BCC)
+                  </label>
+                  <input
+                    type="email"
+                    className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm"
+                    placeholder="tu@gmail.com — vacío para quitar"
+                    value={eOrgEmail}
+                    onChange={(e) => setEOrgEmail(e.target.value)}
+                    autoComplete="email"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Debe coincidir con <code className="rounded bg-zinc-50 px-0.5">ORGANIZER_BCC</code> en{" "}
+                    <code className="rounded bg-zinc-50 px-0.5">.env.local</code> para recibir copia de los PDF.
+                  </p>
+                </div>
               ) : null}
               <div>
                 <label className="text-xs font-semibold text-zinc-600">Usuario</label>

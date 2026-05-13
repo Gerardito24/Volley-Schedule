@@ -17,6 +17,8 @@ import type {
 
 export const LOCAL_TOURNAMENTS_KEY = "volleyschedule-admin-tournaments-v2";
 
+export const VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED = "volleyschedule-tournaments-stored-changed";
+
 export function readStoredTournaments(): TournamentMock[] {
   if (typeof window === "undefined") return [];
   try {
@@ -33,6 +35,7 @@ export function readStoredTournaments(): TournamentMock[] {
 export function writeStoredTournaments(tournaments: TournamentMock[]): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(LOCAL_TOURNAMENTS_KEY, JSON.stringify(tournaments));
+  window.dispatchEvent(new CustomEvent(VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED));
 }
 
 export function appendStoredTournament(tournament: TournamentMock): void {
@@ -72,9 +75,26 @@ function isMatchSideRef(value: unknown): value is MatchSideRef {
   return false;
 }
 
+function isScheduleMatchResultMock(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (!value || typeof value !== "object") return false;
+  const o = value as Record<string, unknown>;
+  return (
+    typeof o.home === "number" &&
+    Number.isInteger(o.home) &&
+    o.home >= 0 &&
+    typeof o.away === "number" &&
+    Number.isInteger(o.away) &&
+    o.away >= 0 &&
+    typeof o.recordedAt === "string" &&
+    o.recordedAt.length > 0
+  );
+}
+
 function isScheduleMatchMock(value: unknown): value is ScheduleMatchMock {
   if (!value || typeof value !== "object") return false;
   const o = value as Record<string, unknown>;
+  if ("result" in o && !isScheduleMatchResultMock(o.result)) return false;
   return (
     typeof o.id === "string" &&
     typeof o.phaseId === "string" &&

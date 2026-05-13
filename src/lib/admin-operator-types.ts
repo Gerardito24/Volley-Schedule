@@ -9,6 +9,8 @@ export type AdminOperator = {
   passwordHash: string;
   role: AdminOperatorRole;
   createdAt: string;
+  /** Correo del organizador (p. ej. Gmail): copia BCC en constancias si `ORGANIZER_BCC` en el servidor coincide. */
+  organizerEmail?: string;
 };
 
 export type AdminOperatorPublic = Omit<AdminOperator, "passwordHash">;

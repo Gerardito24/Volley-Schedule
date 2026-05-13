@@ -16,7 +16,11 @@ import {
 import { appendStoredRegistration } from "@/lib/local-registrations";
 import { upsertClubProfile } from "@/lib/local-club-profiles";
 import { createStubRosterFromRegistration } from "@/lib/local-team-rosters";
-import { downloadRegistrationPdf } from "@/lib/registrationPdf";
+import {
+  downloadRegistrationPdf,
+  registrationPdfFilename,
+  registrationPdfToBase64,
+} from "@/lib/registrationPdf";
 import { applyClubProfileToFormDraft } from "@/lib/registration-reuse";
 import type { ClubProfile } from "@/lib/club-profile-types";
 import { slugify } from "@/lib/slugify";
@@ -69,13 +73,17 @@ function buildClubTeamDisplayName(
   return parts.join(" · ");
 }
 
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
 export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProfile | null }) {
   const fullTournament = useMemo(() => getTournamentBySlug(CLUB_REGISTRY_SLUG), []);
 
   const category = fullTournament?.categories[0];
   const categoryId = category?.id ?? "";
 
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
 
   const [pueblo, setPueblo] = useState("");
   const [teamAgeLabel, setTeamAgeLabel] = useState("");
@@ -100,6 +108,9 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [lastCreated, setLastCreated] = useState<RegistrationRowMock | null>(null);
+  const [deliveryEmail, setDeliveryEmail] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [emailSendError, setEmailSendError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!initialProfile) return;
@@ -137,7 +148,7 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
     setTerms((prev) => prev.map((v, idx) => (idx === i ? !v : v)));
   }
 
-  const handleSubmit = useCallback(
+  const validateFormAndGoToEmailStep = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
       setError(null);
@@ -164,10 +175,6 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
       }
       if (!repName.trim()) {
         setError("Indica el nombre del apoderado/a.");
-        return;
-      }
-      if (!repEmail.trim()) {
-        setError("Indica el email del apoderado/a.");
         return;
       }
       if (!repPhone.trim()) {
@@ -210,77 +217,142 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
         return;
       }
 
-      const coachForRow: CoachEntry = {
-        ...coach,
-        name: coachNameResolved,
-      };
-
-      const teamNameStored = buildClubTeamDisplayName(teamAgeLabel, teamGender, coachForRow.name, repName);
-
-      const clubSlug = slugify(clubName.trim());
-      const now = new Date().toISOString();
-      const divisionLabel = buildDivisionLabel(fullTournament, category, null);
-
-      upsertClubProfile({
-        clubSlug,
-        displayName: clubName.trim(),
-        pueblo: pueblo.trim(),
-        clubPhone: repPhone.trim(),
-        contactName: repName.trim(),
-        contactEmail: repEmail.trim(),
-        updatedAt: now,
-      });
-
-      const row: RegistrationRowMock = {
-        id: `local-reg-${crypto.randomUUID()}`,
-        tournamentSlug: fullTournament.slug,
-        tournamentName: fullTournament.name,
-        divisionLabel,
-        teamName: teamNameStored,
-        clubName: clubName.trim(),
-        status: "approved",
-        updatedAt: now.slice(0, 10),
-        feeCents: 0,
-        registeredAt: now,
-        categoryId,
-        subdivisionId: null,
-        clubAffiliationNumber: clubAffiliationNumber.trim(),
-        representative: { name: repName.trim(), email: repEmail.trim(), phone: repPhone.trim() },
-        coach: coachForRow,
-        hasAssistant,
-        assistant: hasAssistant ? assistant : null,
-        players: filledPlayers,
-        comments: comments.trim() || undefined,
-        signatureDataUrl,
-        termsAccepted: true,
-      };
-
-      appendStoredRegistration(row);
-      createStubRosterFromRegistration(row);
-      setLastCreated(row);
-      setDone(true);
+      setDeliveryEmail(repEmail.trim());
+      setStep(3);
     },
     [
       fullTournament,
       category,
-      categoryId,
       clubName,
       pueblo,
       clubAffiliationNumber,
       teamAgeLabel,
-      teamGender,
       repName,
-      repEmail,
       repPhone,
+      repEmail,
       coach,
-      hasAssistant,
-      assistant,
       players,
       terms,
       signatureDataUrl,
-      comments,
     ],
   );
+
+  const handleFinalSave = useCallback(async () => {
+    setError(null);
+    if (!fullTournament || !category) {
+      setError("No se pudo cargar el registro interno. Recarga la página.");
+      return;
+    }
+
+    const email = deliveryEmail.trim();
+    if (!isValidEmail(email)) {
+      setError("Indica un correo electrónico válido para enviar la constancia en PDF.");
+      return;
+    }
+
+    const coachNameResolved = coach.name.trim() || repName.trim();
+    const coachForRow: CoachEntry = {
+      ...coach,
+      name: coachNameResolved,
+    };
+
+    const teamNameStored = buildClubTeamDisplayName(teamAgeLabel, teamGender, coachForRow.name, repName);
+
+    const clubSlug = slugify(clubName.trim());
+    const now = new Date().toISOString();
+    const divisionLabel = buildDivisionLabel(fullTournament, category, null);
+
+    const filledPlayers = players.filter((pl) => pl.name.trim() && pl.jerseyNumber.trim() && pl.birthDate);
+
+    const row: RegistrationRowMock = {
+      id: `local-reg-${crypto.randomUUID()}`,
+      tournamentSlug: fullTournament.slug,
+      tournamentName: fullTournament.name,
+      divisionLabel,
+      teamName: teamNameStored,
+      clubName: clubName.trim(),
+      status: "approved",
+      updatedAt: now.slice(0, 10),
+      feeCents: 0,
+      registeredAt: now,
+      categoryId,
+      subdivisionId: null,
+      clubAffiliationNumber: clubAffiliationNumber.trim(),
+      representative: { name: repName.trim(), email, phone: repPhone.trim() },
+      coach: coachForRow,
+      hasAssistant,
+      assistant: hasAssistant ? assistant : null,
+      players: filledPlayers,
+      comments: comments.trim() || undefined,
+      signatureDataUrl,
+      termsAccepted: true,
+    };
+
+    setSaving(true);
+    setEmailSendError(null);
+
+    upsertClubProfile({
+      clubSlug,
+      displayName: clubName.trim(),
+      pueblo: pueblo.trim(),
+      clubPhone: repPhone.trim(),
+      contactName: repName.trim(),
+      contactEmail: email,
+      updatedAt: now,
+    });
+
+    appendStoredRegistration(row);
+    createStubRosterFromRegistration(row);
+
+    try {
+      const res = await fetch("/api/club-registration/send-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: email,
+          pdfBase64: registrationPdfToBase64(row),
+          filename: registrationPdfFilename(row),
+        }),
+      });
+      const payload: unknown = await res.json().catch(() => ({}));
+      const errMsg =
+        typeof payload === "object" &&
+        payload !== null &&
+        "error" in payload &&
+        typeof (payload as { error: unknown }).error === "string"
+          ? (payload as { error: string }).error
+          : null;
+      if (!res.ok) {
+        setEmailSendError(errMsg ?? "No se pudo enviar el correo. Puedes descargar el PDF abajo.");
+      }
+    } catch {
+      setEmailSendError(
+        "No se pudo contactar al servidor para enviar el correo. Puedes descargar el PDF abajo.",
+      );
+    }
+
+    setLastCreated(row);
+    setDone(true);
+    setSaving(false);
+  }, [
+    fullTournament,
+    category,
+    categoryId,
+    clubName,
+    pueblo,
+    clubAffiliationNumber,
+    teamAgeLabel,
+    teamGender,
+    repName,
+    repPhone,
+    deliveryEmail,
+    coach,
+    hasAssistant,
+    assistant,
+    players,
+    comments,
+    signatureDataUrl,
+  ]);
 
   if (!fullTournament || !category) {
     return (
@@ -309,6 +381,15 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
               El club aparece en Administración → Equipos y podrás reutilizar estos datos en futuras inscripciones a
               torneo.
             </p>
+            {emailSendError ? (
+              <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
+                {emailSendError}
+              </p>
+            ) : (
+              <p className="mt-3 text-sm text-emerald-700 dark:text-emerald-300">
+                Te enviamos la constancia en PDF al correo que indicaste.
+              </p>
+            )}
           </div>
         </div>
         {lastCreated ? (
@@ -333,6 +414,9 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
             setTerms([false, false, false]);
             setTeamAgeLabel("");
             setTeamGender("mixto");
+            setDeliveryEmail("");
+            setEmailSendError(null);
+            setSaving(false);
           }}
           className="mt-4 text-sm font-medium text-emerald-800 underline dark:text-emerald-200"
         >
@@ -378,6 +462,15 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
                 <li>No hay pago en línea en este flujo: la tarifa queda en $0 como registro de perfil.</li>
               </ul>
             </div>
+            <div>
+              <p className="font-semibold text-zinc-900 dark:text-zinc-100">5. Correo para la constancia</p>
+              <ul className="mt-1 list-disc pl-5 space-y-1 text-zinc-600 dark:text-zinc-400">
+                <li>
+                  Al terminar el formulario indicarás un correo; al pulsar &quot;Guardar registro&quot; se guarda el club
+                  y se envía el PDF a ese correo (si el servidor está configurado).
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
 
@@ -392,8 +485,64 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
     );
   }
 
+  if (step === 3) {
+    return (
+      <div className="space-y-6">
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 space-y-5">
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Correo para la constancia</h2>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Aquí se guarda el registro del club en la aplicación y se envía la constancia en PDF. Usa un correo al que
+            tengas acceso; si el envío falla, podrás descargar el PDF en la pantalla de confirmación.
+          </p>
+          <Field label="Correo electrónico" required hint="Se usa como contacto del registro y destino del PDF">
+            <input
+              type="email"
+              className={inputCls}
+              placeholder="tu@correo.com"
+              value={deliveryEmail}
+              onChange={(e) => setDeliveryEmail(e.target.value)}
+              autoComplete="email"
+            />
+          </Field>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Solo usamos este correo para la constancia y el contacto del registro en este sitio (demo local). No
+            compartimos datos con terceros desde este flujo.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setStep(2);
+            }}
+            disabled={saving}
+            className="rounded-full border border-zinc-300 px-6 py-2.5 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            ‹ Volver al formulario
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleFinalSave()}
+            disabled={saving}
+            className="rounded-full bg-zinc-800 px-8 py-2.5 text-sm font-bold text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          >
+            {saving ? "Guardando…" : "Guardar registro"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-10">
+    <form onSubmit={validateFormAndGoToEmailStep} className="space-y-10">
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
           {error}
@@ -471,11 +620,14 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
           <input className={inputCls} placeholder="Nombre Completo" value={repName} onChange={(e) => setRepName(e.target.value)} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Email Representante del Equipo" required>
+          <Field
+            label="Email del representante (opcional)"
+            hint="Si lo dejas en blanco, indica el correo en el paso siguiente. Puedes prellenar aquí para copiarlo al paso final."
+          >
             <input
               type="email"
               className={inputCls}
-              placeholder="Email Representante del Equipo"
+              placeholder="Email (opcional aquí)"
               value={repEmail}
               onChange={(e) => setRepEmail(e.target.value)}
             />
@@ -658,7 +810,7 @@ export function ClubRegisterForm({ initialProfile }: { initialProfile?: ClubProf
           type="submit"
           className="rounded-full bg-zinc-800 px-8 py-2.5 text-sm font-bold text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
         >
-          Guardar registro de club
+          Continuar: correo y guardar
         </button>
       </div>
     </form>

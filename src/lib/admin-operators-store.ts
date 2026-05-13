@@ -23,15 +23,19 @@ function notifySessionChanged(): void {
 function isOperator(v: unknown): v is AdminOperator {
   if (!v || typeof v !== "object") return false;
   const o = v as Record<string, unknown>;
-  return (
-    typeof o.id === "string" &&
-    typeof o.displayName === "string" &&
-    typeof o.position === "string" &&
-    typeof o.username === "string" &&
-    typeof o.passwordHash === "string" &&
-    (o.role === "it_master" || o.role === "administrator") &&
-    typeof o.createdAt === "string"
-  );
+  if (
+    typeof o.id !== "string" ||
+    typeof o.displayName !== "string" ||
+    typeof o.position !== "string" ||
+    typeof o.username !== "string" ||
+    typeof o.passwordHash !== "string" ||
+    (o.role !== "it_master" && o.role !== "administrator") ||
+    typeof o.createdAt !== "string"
+  ) {
+    return false;
+  }
+  if (o.organizerEmail !== undefined && typeof o.organizerEmail !== "string") return false;
+  return true;
 }
 
 export function readOperators(): AdminOperator[] {
@@ -98,14 +102,25 @@ function uniqueUsername(username: string, excludeId?: string): boolean {
   );
 }
 
+const organizerEmailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /** First-run: create the single IT master (fixed name/position). */
-export function createItMaster(username: string, password: string): StoreResult<AdminOperator> {
+export function createItMaster(
+  username: string,
+  password: string,
+  organizerEmail?: string,
+): StoreResult<AdminOperator> {
   if (typeof window === "undefined") return { ok: false, message: "Solo disponible en el navegador." };
   if (hasItMasterProfile()) return { ok: false, message: "El perfil IT maestro ya existe." };
   const u = username.trim();
   if (!u) return { ok: false, message: "Usuario requerido." };
   if (password.length < 6) return { ok: false, message: "La contraseña debe tener al menos 6 caracteres." };
   if (!uniqueUsername(u)) return { ok: false, message: "Ese nombre de usuario ya está en uso." };
+
+  const org = organizerEmail?.trim() ?? "";
+  if (org && !organizerEmailRe.test(org)) {
+    return { ok: false, message: "Correo del organizador no válido." };
+  }
 
   const op: AdminOperator = {
     id: IT_MASTER_PROFILE_ID,
@@ -115,6 +130,7 @@ export function createItMaster(username: string, password: string): StoreResult<
     passwordHash: hashPassword(password),
     role: "it_master",
     createdAt: new Date().toISOString(),
+    ...(org ? { organizerEmail: org } : {}),
   };
   persistOperators([op]);
   return { ok: true, value: op };
@@ -229,6 +245,8 @@ export type UpdateOperatorPatch = {
   position?: string;
   username?: string;
   password?: string;
+  /** Solo IT maestro; vacío borra el valor guardado. */
+  organizerEmail?: string;
 };
 
 export function updateOperator(
@@ -250,11 +268,24 @@ export function updateOperator(
     if (!uniqueUsername(nextUsername, target.id)) {
       return { ok: false, message: "Ese nombre de usuario ya está en uso." };
     }
+    let organizerEmail = target.organizerEmail;
+    if (patch.organizerEmail !== undefined) {
+      const t = patch.organizerEmail.trim();
+      if (t && !organizerEmailRe.test(t)) {
+        return { ok: false, message: "Correo del organizador no válido." };
+      }
+      organizerEmail = t || undefined;
+    }
     const next: AdminOperator = {
       ...target,
       username: nextUsername,
       passwordHash: patch.password ? hashPassword(patch.password) : target.passwordHash,
     };
+    if (organizerEmail) {
+      next.organizerEmail = organizerEmail;
+    } else {
+      delete next.organizerEmail;
+    }
     const nextList = [...list];
     nextList[idx] = next;
     persistOperators(nextList);

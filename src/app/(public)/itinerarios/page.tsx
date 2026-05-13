@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { mergeAdminTournaments } from "@/lib/merge-tournaments";
-import { readStoredTournaments } from "@/lib/local-tournaments";
+import {
+  readStoredTournaments,
+  VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED,
+} from "@/lib/local-tournaments";
 import { tournaments as seedTournaments, formatTournamentLocationsLine } from "@/lib/mock-data";
 import type { TournamentMock } from "@/lib/mock-data";
-import { buildMatchOrderIndex, formatMatchSide } from "@/lib/schedule-display";
+import { resolveSideToTeamLabel } from "@/lib/schedule-results";
 import type { CategoryScheduleMock } from "@/lib/schedule-types";
 
 function categoryRows(cs: CategoryScheduleMock) {
-  const indexById = buildMatchOrderIndex(cs.phases.flatMap((p) => p.matches));
   const rows: { phase: string; label: string; starts?: string; court?: string }[] = [];
   for (const ph of cs.phases) {
     const phLabel =
@@ -20,10 +22,11 @@ function categoryRows(cs: CategoryScheduleMock) {
           ? "Bracket"
           : ph.templateId;
     for (const m of ph.matches) {
-      const home = formatMatchSide(m.home, cs.teamLabels, indexById);
-      const away = formatMatchSide(m.away, cs.teamLabels, indexById);
+      const home = resolveSideToTeamLabel(m.home, cs);
+      const away = resolveSideToTeamLabel(m.away, cs);
       const as = cs.assignments[m.id];
-      rows.push({ phase: phLabel, label: `${home} vs ${away}`, starts: as?.startsAt, court: as?.courtLabel });
+      const score = m.result ? ` (${m.result.home}–${m.result.away})` : "";
+      rows.push({ phase: phLabel, label: `${home} vs ${away}${score}`, starts: as?.startsAt, court: as?.courtLabel });
     }
   }
   return rows;
@@ -33,7 +36,12 @@ export default function ItinerariosPage() {
   const [all, setAll] = useState<TournamentMock[]>([]);
 
   useEffect(() => {
-    setAll(mergeAdminTournaments(seedTournaments, readStoredTournaments()));
+    function load() {
+      setAll(mergeAdminTournaments(seedTournaments, readStoredTournaments()));
+    }
+    load();
+    window.addEventListener(VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED, load);
+    return () => window.removeEventListener(VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED, load);
   }, []);
 
   const published = useMemo(

@@ -18,6 +18,12 @@ const nav = [
     icon: IconCalendar,
   },
   {
+    href: "/admin/torneos-activos",
+    label: "Torneos activos",
+    match: (path: string) => path.startsWith("/admin/torneos-activos"),
+    icon: IconPlay,
+  },
+  {
     href: "/admin/registrations",
     label: "Inscripciones",
     match: (path: string) => path.startsWith("/admin/registrations"),
@@ -89,6 +95,18 @@ export function AdminSidebar({ menuOpen }: { menuOpen: boolean }) {
         </Link>
       </div>
     </aside>
+  );
+}
+
+function IconPlay({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653Z"
+      />
+    </svg>
   );
 }
 
