@@ -8,6 +8,8 @@ import {
   upsertStoredRoster,
   LOCAL_ROSTERS_KEY,
 } from "@/lib/local-team-rosters";
+import { mergeTeamRosters } from "@/lib/merge-team-rosters";
+import { seedTeamRosters } from "@/lib/seed-team-rosters";
 import { readStoredRegistrations, LOCAL_REGISTRATIONS_KEY } from "@/lib/local-registrations";
 import { mergeAdminRegistrations } from "@/lib/merge-registrations";
 import { registrationRows as seedRows } from "@/lib/mock-data";
@@ -53,7 +55,7 @@ function RosterDetailInner() {
   // a roster yet).
   const baseRoster = useMemo((): TeamRoster | null => {
     const allRegs = mergeAdminRegistrations(seedRows, readStoredRegistrations());
-    const allRosters = readStoredRosters();
+    const allRosters = mergeTeamRosters(seedTeamRosters, readStoredRosters());
 
     const stored = allRosters.find((r) => r.registrationId === registrationId);
     if (stored) {

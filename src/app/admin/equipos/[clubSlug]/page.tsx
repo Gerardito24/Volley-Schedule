@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { readStoredRegistrations, LOCAL_REGISTRATIONS_KEY } from "@/lib/local-registrations";
 import { readStoredRosters, upsertStoredRoster, LOCAL_ROSTERS_KEY } from "@/lib/local-team-rosters";
+import { mergeTeamRosters } from "@/lib/merge-team-rosters";
+import { seedTeamRosters } from "@/lib/seed-team-rosters";
 import type { TeamRoster } from "@/lib/team-roster-types";
 import {
   readClubProfiles,
@@ -32,7 +34,7 @@ function loadRostersForSlug(clubSlug: string): {
   defaultName: string;
 } {
   const allRegs = mergeAdminRegistrations(seedRows, readStoredRegistrations());
-  const allRosters = readStoredRosters();
+  const allRosters = mergeTeamRosters(seedTeamRosters, readStoredRosters());
 
   const clubRegs = allRegs.filter(
     (r) => slugify(r.clubName || r.teamName) === clubSlug,

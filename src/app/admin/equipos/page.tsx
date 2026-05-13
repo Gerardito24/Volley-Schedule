@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { readStoredRegistrations } from "@/lib/local-registrations";
 import { readStoredRosters, LOCAL_ROSTERS_KEY } from "@/lib/local-team-rosters";
+import { mergeTeamRosters } from "@/lib/merge-team-rosters";
+import { seedTeamRosters } from "@/lib/seed-team-rosters";
 import { readClubProfiles, LOCAL_CLUB_PROFILES_KEY } from "@/lib/local-club-profiles";
 import { mergeClubProfiles } from "@/lib/merge-club-profiles";
 import { mergeAdminRegistrations } from "@/lib/merge-registrations";
@@ -23,7 +25,7 @@ type ClubSummary = {
 
 function buildClubSummaries(): ClubSummary[] {
   const regs = mergeAdminRegistrations(seedRows, readStoredRegistrations());
-  const rosters = readStoredRosters();
+  const rosters = mergeTeamRosters(seedTeamRosters, readStoredRosters());
   const profiles = mergeClubProfiles(seedClubProfiles, readClubProfiles());
 
   const map = new Map<string, ClubSummary>();
