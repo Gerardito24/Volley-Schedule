@@ -1,6 +1,9 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { ScheduleBracketView } from "@/components/admin/ScheduleBracketView";
+import { ScheduleCourtsOverview } from "@/components/admin/ScheduleCourtsOverview";
 import type { CategoryMock, RegistrationRowMock, TournamentMock } from "@/lib/mock-data";
 import {
   displayCategoryName,
@@ -45,6 +48,7 @@ import {
 type Props = {
   tournament: TournamentMock;
   onScheduleSaved: () => void;
+  workspace?: boolean;
 };
 
 type SeedSlot =
@@ -91,9 +95,34 @@ function matchesSubdivisionFilter(
   return row.subdivisionId === subdivisionFilter;
 }
 
+function WorkspaceCard({
+  title,
+  eyebrow,
+  children,
+}: {
+  title: string;
+  eyebrow?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      {eyebrow ? (
+        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+          {eyebrow}
+        </p>
+      ) : null}
+      <h3 className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+        {title}
+      </h3>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
 export function TournamentSchedulePanel({
   tournament,
   onScheduleSaved,
+  workspace = false,
 }: Props) {
   const categories = tournament.categories;
   const seedTournamentForSlug = useMemo(
@@ -121,6 +150,9 @@ export function TournamentSchedulePanel({
   const [showManual, setShowManual] = useState(false);
   const [manualText, setManualText] = useState("");
   const [listRevision, setListRevision] = useState(0);
+  const [resultTab, setResultTab] = useState<"bracket" | "courts" | "list">(
+    "bracket",
+  );
 
   const venuesKey = JSON.stringify(tournament.venues);
   const tourCourts = useMemo(
@@ -317,6 +349,18 @@ export function TournamentSchedulePanel({
     });
     return rows;
   }, [existingCatSchedule, matchIndexById]);
+
+  const selectedCategoryLabel =
+    selectedCategory != null
+      ? displayCategoryName(selectedCategory, tournament.divisions)
+      : "Categoría";
+
+  const tabButtonClass = (tab: typeof resultTab) =>
+    `rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+      resultTab === tab
+        ? "bg-emerald-600 text-white"
+        : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+    }`;
 
   function persistSchedule(next: TournamentScheduleMock) {
     upsertStoredTournament({ ...tournament, schedule: next });
@@ -636,7 +680,13 @@ export function TournamentSchedulePanel({
   }
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+    <section
+      className={
+        workspace
+          ? "space-y-6"
+          : "rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900"
+      }
+    >
       <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
         Itinerario y brackets
       </h3>
@@ -650,13 +700,53 @@ export function TournamentSchedulePanel({
         </p>
       ) : null}
 
+      {workspace ? (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <p className="text-xs text-zinc-500">Categoría activa</p>
+            <p className="mt-1 font-semibold text-zinc-900 dark:text-zinc-50">
+              {selectedCategoryLabel}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <p className="text-xs text-zinc-500">Canchas elegidas</p>
+            <p className="mt-1 font-semibold text-zinc-900 dark:text-zinc-50">
+              {allowedCourtIds.length || "—"}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <p className="text-xs text-zinc-500">Partidos generados</p>
+            <p className="mt-1 font-semibold text-zinc-900 dark:text-zinc-50">
+              {flatRows.length}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {error ? (
         <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200">
           {error}
         </p>
       ) : null}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+      <div className={workspace ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : ""}>
+        <div className={workspace ? "space-y-6" : ""}>
+          {workspace ? (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                Paso 1
+              </p>
+              <h3 className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                Categoría y equipos
+              </h3>
+              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                Escogé la categoría, confirmá el orden de seeds y define la
+                plantilla antes de generar.
+              </p>
+            </div>
+          ) : null}
+
+      <div className={workspace ? "grid gap-4 sm:grid-cols-2" : "mt-6 grid gap-4 sm:grid-cols-2"}>
         <div>
           <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
             Categoría
@@ -874,8 +964,18 @@ export function TournamentSchedulePanel({
           </div>
         ) : null}
       </div>
+      {workspace ? (
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+            Paso 2
+          </p>
+          <h3 className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            Generar y publicar
+          </h3>
+        </div>
+      ) : null}
 
-      <div className="mt-6 rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-700 dark:bg-zinc-950/40">
+      <div className={workspace ? "rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-700 dark:bg-zinc-950/40" : "mt-6 rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-700 dark:bg-zinc-950/40"}>
         <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
           Auto-itinerario (obligatorio para generar)
         </p>
@@ -978,8 +1078,65 @@ export function TournamentSchedulePanel({
           Publicar itinerario en la página del torneo
         </label>
       </div>
+        </div>
+        {workspace ? (
+          <aside className="space-y-6">
+            <WorkspaceCard title="Canchas y juegos" eyebrow="Ocupación">
+              <ScheduleCourtsOverview tournament={tournament} />
+            </WorkspaceCard>
+          </aside>
+        ) : null}
+      </div>
 
-      {existingCatSchedule && flatRows.length > 0 ? (
+      {workspace ? (
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                Resultado
+              </p>
+              <h3 className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                Bracket, canchas y lista detallada
+              </h3>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setResultTab("bracket")}
+                className={tabButtonClass("bracket")}
+              >
+                Bracket
+              </button>
+              <button
+                type="button"
+                onClick={() => setResultTab("courts")}
+                className={tabButtonClass("courts")}
+              >
+                Canchas
+              </button>
+              <button
+                type="button"
+                onClick={() => setResultTab("list")}
+                className={tabButtonClass("list")}
+              >
+                Lista detallada
+              </button>
+            </div>
+          </div>
+          <div className="mt-5">
+            {resultTab === "bracket" ? (
+              <ScheduleBracketView
+                schedule={existingCatSchedule}
+                categoryLabel={selectedCategoryLabel}
+              />
+            ) : resultTab === "courts" ? (
+              <ScheduleCourtsOverview tournament={tournament} />
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {(!workspace || resultTab === "list") && existingCatSchedule && flatRows.length > 0 ? (
         <div className="mt-8 overflow-x-auto">
           <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
             Partidos e itinerario
@@ -1084,11 +1241,15 @@ export function TournamentSchedulePanel({
             </tbody>
           </table>
         </div>
-      ) : (
+      ) : !workspace ? (
         <p className="mt-6 text-sm text-zinc-500">
           Aún no hay partidos generados para esta categoría.
         </p>
-      )}
+      ) : resultTab === "list" ? (
+        <p className="rounded-2xl border border-dashed border-zinc-300 p-5 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+          Aún no hay partidos generados para esta categoría.
+        </p>
+      ) : null}
     </section>
   );
 }

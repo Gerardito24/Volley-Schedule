@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { TournamentSchedulePanel } from "@/components/admin/TournamentSchedulePanel";
 import { MergedRegistrationsTable } from "@/components/MergedRegistrationsTable";
 import {
   readStoredTournaments,
@@ -211,6 +210,8 @@ function AdminTournamentDetailInner() {
       teamCount: regs.length,
       categoryCount: nt.categories.length,
       courtsLabel: hasCourtNumbers ? String(courtSum) : "—",
+      scheduleCategoryCount: nt.schedule?.categorySchedules.length ?? 0,
+      schedulePublished: nt.schedule?.published ?? false,
     };
   }, [tournament, merged, regRevision]);
 
@@ -1208,10 +1209,45 @@ function AdminTournamentDetailInner() {
         </ul>
       </section>
 
-      <TournamentSchedulePanel
-        tournament={tournament}
-        onScheduleSaved={refreshMerged}
-      />
+      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              Itinerario y brackets
+            </h3>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              Abrí una pantalla dedicada para generar partidos, revisar canchas
+              ocupadas y manejar el bracket visualmente.
+            </p>
+          </div>
+          <Link
+            href={`/admin/tournaments/${encodeURIComponent(slug)}/schedule`}
+            className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+          >
+            Abrir creador de itinerario
+          </Link>
+        </div>
+        <dl className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+            <dt className="text-xs text-zinc-500">Categorías con itinerario</dt>
+            <dd className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              {tournamentStats?.scheduleCategoryCount ?? 0}
+            </dd>
+          </div>
+          <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+            <dt className="text-xs text-zinc-500">Estado público</dt>
+            <dd className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              {tournamentStats?.schedulePublished ? "Publicado" : "No publicado"}
+            </dd>
+          </div>
+          <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+            <dt className="text-xs text-zinc-500">Canchas configuradas</dt>
+            <dd className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              {tournamentStats?.courtsLabel ?? "—"}
+            </dd>
+          </div>
+        </dl>
+      </section>
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
         <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
