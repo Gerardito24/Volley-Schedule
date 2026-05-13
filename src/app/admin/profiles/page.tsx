@@ -10,11 +10,36 @@ import {
 } from "@/lib/admin-operator-types";
 import {
   addAdministrator,
+  clearSession,
   deleteOperator,
   getCurrentOperator,
   listOperatorsPublic,
   updateOperator,
 } from "@/lib/admin-operators-store";
+import { fetchAdminJson, isRemoteDbEnabled } from "@/lib/remote-data";
+
+type MeOperator = {
+  id: string;
+  displayName: string;
+  position: string;
+  username: string;
+  role: AdminOperator["role"];
+  createdAt?: string;
+  organizerEmail?: string;
+};
+
+function meToActor(me: MeOperator): AdminOperator {
+  return {
+    id: me.id,
+    displayName: me.displayName,
+    position: me.position,
+    username: me.username,
+    role: me.role,
+    createdAt: me.createdAt ?? "",
+    passwordHash: "",
+    ...(me.organizerEmail ? { organizerEmail: me.organizerEmail } : {}),
+  };
+}
 
 export default function AdminProfilesPage() {
   const router = useRouter();
@@ -23,15 +48,45 @@ export default function AdminProfilesPage() {
     typeof window !== "undefined" ? getCurrentOperator() : null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [useRemote, setUseRemote] = useState(false);
 
-  const refresh = useCallback(() => {
-    setActor(getCurrentOperator());
-    setRows(listOperatorsPublic());
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const remote = await isRemoteDbEnabled();
+      setUseRemote(remote);
+      if (remote) {
+        const me = await fetchAdminJson<{ ok: boolean; operator: MeOperator | null }>(
+          "/api/admin/auth/me",
+          { cache: "no-store" },
+        );
+        const ops = await fetchAdminJson<{ ok: boolean; operators: AdminOperatorPublic[] }>(
+          "/api/admin/operators",
+          { cache: "no-store" },
+        );
+        setActor(me.operator ? meToActor(me.operator) : null);
+        setRows(ops.operators);
+      } else {
+        setActor(getCurrentOperator());
+        setRows(listOperatorsPublic());
+      }
+    } catch {
+      setError("No se pudieron cargar los perfiles.");
+      setActor(getCurrentOperator());
+      setRows(listOperatorsPublic());
+      setUseRemote(false);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    refresh();
-    const on = () => refresh();
+    void refresh();
+    const on = () => {
+      void refresh();
+    };
     window.addEventListener("volleyschedule-admin-operators-changed", on);
     window.addEventListener("volleyschedule-admin-session-changed", on);
     return () => {
@@ -53,10 +108,12 @@ export default function AdminProfilesPage() {
   const [ePass, setEPass] = useState("");
   const [eOrgEmail, setEOrgEmail] = useState("");
 
+  if (loading) {
+    return <div className="text-sm text-zinc-500">Cargando perfiles…</div>;
+  }
+
   if (!actor) {
-    return (
-      <div className="text-sm text-zinc-500">Cargando sesión…</div>
-    );
+    return <div className="text-sm text-zinc-500">Cargando sesión…</div>;
   }
 
   function openEdit(p: AdminOperatorPublic) {
@@ -69,10 +126,10 @@ export default function AdminProfilesPage() {
     setError(null);
   }
 
-  function saveEdit(e: React.FormEvent) {
+  async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const a = getCurrentOperator();
+    const a = actor;
     if (!a || !editId) return;
     const patch =
       editId === IT_MASTER_PROFILE_ID
@@ -83,21 +140,61 @@ export default function AdminProfilesPage() {
             username: eUser,
             password: ePass || undefined,
           };
+
+    if (useRemote) {
+      try {
+        await fetchAdminJson(`/api/admin/operators/${encodeURIComponent(editId)}`, {
+          method: "PUT",
+          body: JSON.stringify(patch),
+        });
+        setEditId(null);
+        await refresh();
+        window.dispatchEvent(new CustomEvent("volleyschedule-admin-session-changed"));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "No se pudo guardar el perfil.");
+      }
+      return;
+    }
+
     const res = updateOperator(a, editId, patch);
     if (!res.ok) {
       setError(res.message);
       return;
     }
     setEditId(null);
-    refresh();
+    await refresh();
     window.dispatchEvent(new CustomEvent("volleyschedule-admin-session-changed"));
   }
 
-  function submitCreate(e: React.FormEvent) {
+  async function submitCreate(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const a = getCurrentOperator();
+    const a = actor;
     if (!a) return;
+
+    if (useRemote) {
+      try {
+        await fetchAdminJson("/api/admin/operators", {
+          method: "POST",
+          body: JSON.stringify({
+            displayName: cName,
+            position: cPos,
+            username: cUser,
+            password: cPass,
+          }),
+        });
+        setShowCreate(false);
+        setCName("");
+        setCPos("");
+        setCUser("");
+        setCPass("");
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "No se pudo crear el administrador.");
+      }
+      return;
+    }
+
     const res = addAdministrator(a, cName, cPos, cUser, cPass);
     if (!res.ok) {
       setError(res.message);
@@ -108,23 +205,54 @@ export default function AdminProfilesPage() {
     setCPos("");
     setCUser("");
     setCPass("");
-    refresh();
+    await refresh();
   }
 
-  function confirmDelete(p: AdminOperatorPublic) {
-    const a = getCurrentOperator();
+  async function confirmDelete(p: AdminOperatorPublic) {
+    const a = actor;
     if (!a) return;
     const msg =
       p.role === "it_master"
         ? "¿Eliminar el perfil IT maestro? El administrador quedará bloqueado hasta volver a configurar."
         : `¿Eliminar el perfil de ${p.displayName}?`;
     if (!window.confirm(msg)) return;
+
+    if (useRemote) {
+      try {
+        const res = await fetch(`/api/admin/operators/${encodeURIComponent(p.id)}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          message?: string;
+          clearedSession?: boolean;
+        };
+        if (!res.ok) {
+          setError(typeof data.message === "string" ? data.message : "No se pudo eliminar.");
+          return;
+        }
+        await refresh();
+        if (data.clearedSession) {
+          clearSession();
+          await fetch("/api/admin/auth/logout", { method: "POST", credentials: "include" }).catch(
+            () => undefined,
+          );
+          router.replace("/admin/login");
+          return;
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "No se pudo eliminar el perfil.");
+      }
+      return;
+    }
+
     const res = deleteOperator(a, p.id);
     if (!res.ok) {
       setError(res.message);
       return;
     }
-    refresh();
+    await refresh();
     if (p.role === "it_master") {
       router.replace("/admin/setup");
     }
@@ -139,6 +267,11 @@ export default function AdminProfilesPage() {
         <p className="mt-1 text-sm text-zinc-600">
           El perfil IT maestro tiene control total. Los administradores gestionan el día a día; no pueden
           modificar ni eliminar el IT maestro.
+          {useRemote ? (
+            <span className="mt-1 block text-xs text-emerald-700">
+              Modo servidor: los cambios se guardan en la base de datos (Postgres).
+            </span>
+          ) : null}
         </p>
       </div>
 
@@ -163,7 +296,7 @@ export default function AdminProfilesPage() {
 
       {showCreate ? (
         <form
-          onSubmit={submitCreate}
+          onSubmit={(ev) => void submitCreate(ev)}
           className="max-w-md space-y-3 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm"
         >
           <h2 className="text-sm font-bold text-zinc-900">Crear administrador</h2>
@@ -275,7 +408,7 @@ export default function AdminProfilesPage() {
                       <button
                         type="button"
                         className="ml-3 text-red-600 hover:underline"
-                        onClick={() => confirmDelete(p)}
+                        onClick={() => void confirmDelete(p)}
                       >
                         Eliminar
                       </button>
@@ -291,7 +424,7 @@ export default function AdminProfilesPage() {
       {editId ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
           <form
-            onSubmit={saveEdit}
+            onSubmit={(ev) => void saveEdit(ev)}
             className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
           >
             <h2 className="text-lg font-bold text-zinc-900">
@@ -340,7 +473,7 @@ export default function AdminProfilesPage() {
                   />
                   <p className="mt-1 text-xs text-zinc-500">
                     Debe coincidir con <code className="rounded bg-zinc-50 px-0.5">ORGANIZER_BCC</code> en{" "}
-                    <code className="rounded bg-zinc-50 px-0.5">.env.local</code> para recibir copia de los PDF.
+                    <code className="rounded bg-zinc-50 px-0.5">.env</code> para recibir copia de los PDF.
                   </p>
                 </div>
               ) : null}

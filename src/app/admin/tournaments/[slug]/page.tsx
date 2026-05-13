@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { MergedRegistrationsTable } from "@/components/MergedRegistrationsTable";
+import { computeMergedTournaments } from "@/hooks/use-merged-tournaments";
 import {
   readStoredTournaments,
   upsertStoredTournament,
@@ -134,12 +135,12 @@ function AdminTournamentDetailInner() {
     mergeAdminTournaments(seedTournaments, readStoredTournaments()),
   );
 
-  const refreshMerged = useCallback(() => {
-    setMerged(mergeAdminTournaments(seedTournaments, readStoredTournaments()));
+  const refreshMerged = useCallback(async () => {
+    setMerged(await computeMergedTournaments());
   }, []);
 
   useEffect(() => {
-    refreshMerged();
+    void refreshMerged();
   }, [slug, refreshMerged]);
 
   const tournament = useMemo(
@@ -259,7 +260,7 @@ function AdminTournamentDetailInner() {
   const persistTournament = useCallback(
     (next: TournamentMock) => {
       upsertStoredTournament(next);
-      refreshMerged();
+      void refreshMerged();
     },
     [refreshMerged],
   );

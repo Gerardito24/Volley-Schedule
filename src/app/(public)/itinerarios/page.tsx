@@ -1,16 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { mergeAdminTournaments } from "@/lib/merge-tournaments";
-import {
-  readStoredTournaments,
-  VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED,
-} from "@/lib/local-tournaments";
-import { tournaments as seedTournaments, formatTournamentLocationsLine } from "@/lib/mock-data";
-import type { TournamentMock } from "@/lib/mock-data";
+import { useMemo } from "react";
+import { formatTournamentLocationsLine } from "@/lib/mock-data";
 import { resolveSideToTeamLabel } from "@/lib/schedule-results";
 import type { CategoryScheduleMock } from "@/lib/schedule-types";
+import { useMergedTournaments } from "@/hooks/use-merged-tournaments";
 
 function categoryRows(cs: CategoryScheduleMock) {
   const rows: { phase: string; label: string; starts?: string; court?: string }[] = [];
@@ -33,16 +28,7 @@ function categoryRows(cs: CategoryScheduleMock) {
 }
 
 export default function ItinerariosPage() {
-  const [all, setAll] = useState<TournamentMock[]>([]);
-
-  useEffect(() => {
-    function load() {
-      setAll(mergeAdminTournaments(seedTournaments, readStoredTournaments()));
-    }
-    load();
-    window.addEventListener(VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED, load);
-    return () => window.removeEventListener(VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED, load);
-  }, []);
+  const all = useMergedTournaments();
 
   const published = useMemo(
     () =>

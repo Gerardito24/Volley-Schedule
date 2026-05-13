@@ -19,39 +19,94 @@ export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const hasMaster = hasItMasterProfile();
-    const session = readSession();
     const path = pathname;
 
-    if (!hasMaster) {
-      if (path !== "/admin/setup") {
-        router.replace("/admin/setup");
-        return;
-      }
+    if (path === "/admin/db-migration") {
       setReady(true);
       return;
     }
 
-    if (path === "/admin/setup") {
-      router.replace("/admin/login");
-      return;
-    }
+    let cancelled = false;
 
-    if (!session) {
-      if (path !== "/admin/login") {
+    async function run() {
+      const dbRes = await fetch("/api/admin/db", { cache: "no-store" });
+      const dbJson = (await dbRes.json().catch(() => ({}))) as { configured?: boolean };
+      const dbConfigured = Boolean(dbJson.configured);
+
+      if (cancelled) return;
+
+      if (dbConfigured) {
+        if (path === "/admin/setup") {
+          router.replace("/admin/login");
+          return;
+        }
+
+        const meRes = await fetch("/api/admin/auth/me", {
+          cache: "no-store",
+          credentials: "include",
+        });
+        const me = (await meRes.json().catch(() => ({}))) as {
+          operator?: { id: string } | null;
+        };
+        const loggedIn = Boolean(me?.operator);
+
+        if (!loggedIn) {
+          if (path !== "/admin/login") {
+            router.replace("/admin/login");
+            return;
+          }
+          setReady(true);
+          return;
+        }
+
+        if (path === "/admin/login") {
+          router.replace("/admin");
+          return;
+        }
+
+        setReady(true);
+        return;
+      }
+
+      const hasMaster = hasItMasterProfile();
+      if (!hasMaster) {
+        if (path !== "/admin/setup") {
+          router.replace("/admin/setup");
+          return;
+        }
+        setReady(true);
+        return;
+      }
+
+      if (path === "/admin/setup") {
         router.replace("/admin/login");
         return;
       }
+
+      const session = readSession();
+      if (!session) {
+        if (path !== "/admin/login") {
+          router.replace("/admin/login");
+          return;
+        }
+        setReady(true);
+        return;
+      }
+
+      if (path === "/admin/login") {
+        router.replace("/admin");
+        return;
+      }
+
       setReady(true);
-      return;
     }
 
-    if (path === "/admin/login" || path === "/admin/setup") {
-      router.replace("/admin");
-      return;
-    }
+    setReady(false);
+    void run();
 
-    setReady(true);
+    return () => {
+      cancelled = true;
+    };
   }, [pathname, router]);
 
   const isPublicShell = pathname === "/admin/setup" || pathname === "/admin/login";

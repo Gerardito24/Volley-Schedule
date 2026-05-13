@@ -14,6 +14,7 @@ import type {
   SchedulePoolMock,
   TournamentScheduleMock,
 } from "@/lib/schedule-types";
+import { upsertRemoteTournament } from "@/lib/remote-tournaments";
 
 export const LOCAL_TOURNAMENTS_KEY = "volleyschedule-admin-tournaments-v2";
 
@@ -54,6 +55,9 @@ export function upsertStoredTournament(tournament: TournamentMock): void {
   } else {
     writeStoredTournaments([...existing, tournament]);
   }
+  void upsertRemoteTournament(tournament).catch(() => {
+    // Railway/Postgres is optional during migration; localStorage remains fallback.
+  });
 }
 
 function isMatchSideRef(value: unknown): value is MatchSideRef {

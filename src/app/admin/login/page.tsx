@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { setSession, tryLogin } from "@/lib/admin-operators-store";
+import { isRemoteDbEnabled } from "@/lib/remote-data";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -11,18 +12,37 @@ export default function AdminLoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const op = tryLogin(username, password);
-    setBusy(false);
-    if (!op) {
-      setError("Usuario o contraseña incorrectos.");
-      return;
+    try {
+      if (await isRemoteDbEnabled()) {
+        const res = await fetch("/api/admin/auth/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ username, password }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
+        if (!res.ok) {
+          setError(typeof data.message === "string" ? data.message : "Usuario o contraseña incorrectos.");
+          return;
+        }
+        router.replace("/admin");
+        return;
+      }
+
+      const op = tryLogin(username, password);
+      if (!op) {
+        setError("Usuario o contraseña incorrectos.");
+        return;
+      }
+      setSession(op.id);
+      router.replace("/admin");
+    } finally {
+      setBusy(false);
     }
-    setSession(op.id);
-    router.replace("/admin");
   }
 
   return (

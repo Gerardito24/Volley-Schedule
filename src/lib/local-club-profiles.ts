@@ -1,4 +1,5 @@
 import type { ClubProfile } from "@/lib/club-profile-types";
+import { upsertRemoteClubProfile } from "@/lib/remote-club-profiles";
 
 export const LOCAL_CLUB_PROFILES_KEY = "volleyschedule-club-profiles-v1";
 
@@ -31,6 +32,9 @@ export function upsertClubProfile(profile: ClubProfile): void {
   if (idx >= 0) next[idx] = profile;
   else next.push(profile);
   window.localStorage.setItem(LOCAL_CLUB_PROFILES_KEY, JSON.stringify(next));
+  void upsertRemoteClubProfile(profile).catch(() => {
+    // Railway/Postgres is optional during migration; localStorage remains fallback.
+  });
   notify();
 }
 

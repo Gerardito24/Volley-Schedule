@@ -24,19 +24,62 @@ export function AdminTopBar({ onMenuClick }: Props) {
   );
 
   useEffect(() => {
-    function sync() {
+    function syncLocal() {
       setOp(getCurrentOperator());
     }
-    sync();
-    window.addEventListener("volleyschedule-admin-session-changed", sync);
-    window.addEventListener("volleyschedule-admin-operators-changed", sync);
+    syncLocal();
+    window.addEventListener("volleyschedule-admin-session-changed", syncLocal);
+    window.addEventListener("volleyschedule-admin-operators-changed", syncLocal);
     return () => {
-      window.removeEventListener("volleyschedule-admin-session-changed", sync);
-      window.removeEventListener("volleyschedule-admin-operators-changed", sync);
+      window.removeEventListener("volleyschedule-admin-session-changed", syncLocal);
+      window.removeEventListener("volleyschedule-admin-operators-changed", syncLocal);
     };
   }, []);
 
-  function logout() {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function syncRemote() {
+      const dbRes = await fetch("/api/admin/db", { cache: "no-store" });
+      const dbJson = (await dbRes.json().catch(() => ({}))) as { configured?: boolean };
+      if (!dbJson.configured || cancelled) return;
+
+      const meRes = await fetch("/api/admin/auth/me", {
+        cache: "no-store",
+        credentials: "include",
+      });
+      const me = (await meRes.json().catch(() => ({}))) as {
+        operator?: Pick<AdminOperator, "id" | "displayName" | "position" | "username" | "role"> | null;
+      };
+      if (cancelled || !me.operator) return;
+
+      const o = me.operator;
+      setOp({
+        id: o.id,
+        displayName: o.displayName,
+        position: o.position,
+        username: o.username,
+        passwordHash: "",
+        role: o.role,
+        createdAt: "",
+      });
+    }
+
+    void syncRemote();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function logout() {
+    const dbRes = await fetch("/api/admin/db", { cache: "no-store" });
+    const dbJson = (await dbRes.json().catch(() => ({}))) as { configured?: boolean };
+    if (dbJson.configured) {
+      await fetch("/api/admin/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    }
     clearSession();
     router.replace("/admin/login");
   }
@@ -77,7 +120,7 @@ export function AdminTopBar({ onMenuClick }: Props) {
       </div>
       <button
         type="button"
-        onClick={logout}
+        onClick={() => void logout()}
         className="shrink-0 rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 min-h-[44px] lg:min-h-0 lg:py-1.5"
       >
         Salir

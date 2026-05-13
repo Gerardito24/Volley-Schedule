@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
-import { appendStoredTournament, readStoredTournaments } from "@/lib/local-tournaments";
-import { mergeAdminTournaments } from "@/lib/merge-tournaments";
+import { appendStoredTournament } from "@/lib/local-tournaments";
+import { computeMergedTournaments } from "@/hooks/use-merged-tournaments";
 import type { CategoryGender, CategoryMock, TournamentMock } from "@/lib/mock-data";
 import { buildDefaultCategoryLabel, tournaments as seedTournaments } from "@/lib/mock-data";
 import { slugify } from "@/lib/slugify";
@@ -240,7 +240,7 @@ export function NewTournamentForm() {
     if (promoInputRef.current) promoInputRef.current.value = "";
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
@@ -347,10 +347,7 @@ export function NewTournamentForm() {
       });
     }
 
-    const mergedForSlug = mergeAdminTournaments(
-      seedTournaments,
-      readStoredTournaments(),
-    );
+    const mergedForSlug = await computeMergedTournaments();
     const takenSlugs = new Set(mergedForSlug.map((t) => t.slug));
     const slug = uniqueSlug(name, takenSlugs);
 

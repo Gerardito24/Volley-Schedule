@@ -1,9 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { MatchScheduleEditDialog } from "@/components/admin/MatchScheduleEditDialog";
 import { ScheduleBracketView } from "@/components/admin/ScheduleBracketView";
 import { ScheduleCourtsOverview } from "@/components/admin/ScheduleCourtsOverview";
+import { buildScheduleMatchViews } from "@/components/admin/schedule-view-utils";
 import type { CategoryMock, RegistrationRowMock, TournamentMock } from "@/lib/mock-data";
 import {
   displayCategoryName,
@@ -95,30 +96,6 @@ function matchesSubdivisionFilter(
   return row.subdivisionId === subdivisionFilter;
 }
 
-function WorkspaceCard({
-  title,
-  eyebrow,
-  children,
-}: {
-  title: string;
-  eyebrow?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      {eyebrow ? (
-        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-          {eyebrow}
-        </p>
-      ) : null}
-      <h3 className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-        {title}
-      </h3>
-      <div className="mt-4">{children}</div>
-    </section>
-  );
-}
-
 export function TournamentSchedulePanel({
   tournament,
   onScheduleSaved,
@@ -150,9 +127,9 @@ export function TournamentSchedulePanel({
   const [showManual, setShowManual] = useState(false);
   const [manualText, setManualText] = useState("");
   const [listRevision, setListRevision] = useState(0);
-  const [resultTab, setResultTab] = useState<"bracket" | "courts" | "list">(
-    "bracket",
-  );
+  const [configOpen, setConfigOpen] = useState(true);
+  const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
 
   const venuesKey = JSON.stringify(tournament.venues);
   const tourCourts = useMemo(
@@ -350,17 +327,52 @@ export function TournamentSchedulePanel({
     return rows;
   }, [existingCatSchedule, matchIndexById]);
 
+  useEffect(() => {
+    setConfigOpen(flatRows.length === 0);
+  }, [categoryId, flatRows.length]);
+
   const selectedCategoryLabel =
     selectedCategory != null
       ? displayCategoryName(selectedCategory, tournament.divisions)
       : "Categoría";
 
-  const tabButtonClass = (tab: typeof resultTab) =>
-    `rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-      resultTab === tab
-        ? "bg-emerald-600 text-white"
-        : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-    }`;
+  const editTargetCategoryId = editingMatchId
+    ? (editingCategoryId ?? categoryId)
+    : categoryId;
+  const editCatSchedule = useMemo(
+    () =>
+      tournament.schedule?.categorySchedules.find(
+        (c) => c.categoryId === editTargetCategoryId,
+      ),
+    [tournament.schedule, editTargetCategoryId],
+  );
+  const editCategoryLabel = useMemo(() => {
+    const cat = categories.find((c) => c.id === editTargetCategoryId);
+    return cat ? displayCategoryName(cat, tournament.divisions) : "Categoría";
+  }, [categories, editTargetCategoryId, tournament.divisions]);
+
+  const editMatchView = useMemo(() => {
+    if (!editingMatchId || !editCatSchedule) return null;
+    const views = buildScheduleMatchViews(editCatSchedule, editCategoryLabel);
+    return views.find((v) => v.matchId === editingMatchId) ?? null;
+  }, [editingMatchId, editCatSchedule, editCategoryLabel]);
+
+  const courtIdsForEditCategory = useMemo(() => {
+    if (!editCatSchedule) return tourCourts.map((c) => c.id);
+    const meta = editCatSchedule.schedulingMeta;
+    if (meta?.allowedCourtIds?.length) {
+      return sortCourtIdsByVenueOrder(
+        meta.allowedCourtIds.filter((id) => tourCourts.some((t) => t.id === id)),
+        tourCourts,
+      );
+    }
+    return tourCourts.map((c) => c.id);
+  }, [editCatSchedule, tourCourts]);
+
+  function openMatchEditor(matchId: string, catId?: string) {
+    setEditingCategoryId(catId ?? null);
+    setEditingMatchId(matchId);
+  }
 
   function persistSchedule(next: TournamentScheduleMock) {
     upsertStoredTournament({ ...tournament, schedule: next });
@@ -556,18 +568,23 @@ export function TournamentSchedulePanel({
   function patchAssignment(
     matchId: string,
     patch: Partial<ScheduleAssignmentMock>,
+    targetCategoryId: string = categoryId,
   ) {
-    if (!existingCatSchedule) return;
+    const catSched =
+      tournament.schedule?.categorySchedules.find(
+        (c) => c.categoryId === targetCategoryId,
+      ) ?? null;
+    if (!catSched) return;
     const prev =
-      existingCatSchedule.assignments[matchId] ?? ({} as ScheduleAssignmentMock);
+      catSched.assignments[matchId] ?? ({} as ScheduleAssignmentMock);
     const merged: ScheduleAssignmentMock = { ...prev, ...patch };
     const nextAssign: Record<string, ScheduleAssignmentMock> = {
-      ...existingCatSchedule.assignments,
+      ...catSched.assignments,
       [matchId]: merged,
     };
 
-    const meta = existingCatSchedule.schedulingMeta;
-    const ordered = buildOrderedMatchIds(existingCatSchedule.phases);
+    const meta = catSched.schedulingMeta;
+    const ordered = buildOrderedMatchIds(catSched.phases);
 
     if (merged.startsAt) {
       const windowErr =
@@ -624,12 +641,12 @@ export function TournamentSchedulePanel({
         const mergedSchedules = (
           tournament.schedule?.categorySchedules ?? []
         ).map((c) =>
-          c.categoryId === categoryId ? { ...c, assignments: nextAssign } : c,
+          c.categoryId === targetCategoryId ? { ...c, assignments: nextAssign } : c,
         );
         const conflict = findGlobalAssignmentConflict({
           categorySchedules: mergedSchedules,
           courts: tourCourts,
-          focusCategoryId: categoryId,
+          focusCategoryId: targetCategoryId,
           focusMatchId: matchId,
           focusAssignments: nextAssign,
           focusDurationMinutes: meta.durationMinutes,
@@ -654,12 +671,12 @@ export function TournamentSchedulePanel({
 
     setError(null);
     const nextCat: CategoryScheduleMock = {
-      ...existingCatSchedule,
+      ...catSched,
       assignments: nextAssign,
     };
     const others =
       tournament.schedule?.categorySchedules.filter(
-        (c) => c.categoryId !== categoryId,
+        (c) => c.categoryId !== targetCategoryId,
       ) ?? [];
     persistSchedule({
       published,
@@ -679,58 +696,8 @@ export function TournamentSchedulePanel({
     return null;
   }
 
-  return (
-    <section
-      className={
-        workspace
-          ? "space-y-6"
-          : "rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900"
-      }
-    >
-      <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-        Itinerario y brackets
-      </h3>
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-        Inscripciones <strong>pagadas</strong> o <strong>aprobadas</strong>, orden por fecha. Reordená y generá el bracket; todo queda en este navegador.
-      </p>
-
-      {!hasSchedulableVenueCourts ? (
-        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-          Para planificar canchas compartidas entre categorías, definí cuántas canchas tiene cada sede en la ficha del torneo (Ubicaciones y canchas).
-        </p>
-      ) : null}
-
-      {workspace ? (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <p className="text-xs text-zinc-500">Categoría activa</p>
-            <p className="mt-1 font-semibold text-zinc-900 dark:text-zinc-50">
-              {selectedCategoryLabel}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <p className="text-xs text-zinc-500">Canchas elegidas</p>
-            <p className="mt-1 font-semibold text-zinc-900 dark:text-zinc-50">
-              {allowedCourtIds.length || "—"}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <p className="text-xs text-zinc-500">Partidos generados</p>
-            <p className="mt-1 font-semibold text-zinc-900 dark:text-zinc-50">
-              {flatRows.length}
-            </p>
-          </div>
-        </div>
-      ) : null}
-
-      {error ? (
-        <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200">
-          {error}
-        </p>
-      ) : null}
-
-      <div className={workspace ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" : ""}>
-        <div className={workspace ? "space-y-6" : ""}>
+  const scheduleConfigInner = (
+    <>
           {workspace ? (
             <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
@@ -1078,65 +1045,125 @@ export function TournamentSchedulePanel({
           Publicar itinerario en la página del torneo
         </label>
       </div>
-        </div>
-        {workspace ? (
-          <aside className="space-y-6">
-            <WorkspaceCard title="Canchas y juegos" eyebrow="Ocupación">
-              <ScheduleCourtsOverview tournament={tournament} />
-            </WorkspaceCard>
-          </aside>
-        ) : null}
-      </div>
+    </>
+  );
+
+  return (
+    <section
+      className={
+        workspace
+          ? "space-y-6"
+          : "rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900"
+      }
+    >
+      <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+        Itinerario y brackets
+      </h3>
+      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+        Inscripciones <strong>pagadas</strong> o <strong>aprobadas</strong>, orden por fecha. Reordená y generá el bracket; todo queda en este navegador.
+      </p>
+
+      {!hasSchedulableVenueCourts ? (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          Para planificar canchas compartidas entre categorías, definí cuántas canchas tiene cada sede en la ficha del torneo (Ubicaciones y canchas).
+        </p>
+      ) : null}
 
       {workspace ? (
-        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <p className="text-xs text-zinc-500">Categoría activa</p>
+            <p className="mt-1 font-semibold text-zinc-900 dark:text-zinc-50">
+              {selectedCategoryLabel}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <p className="text-xs text-zinc-500">Canchas elegidas</p>
+            <p className="mt-1 font-semibold text-zinc-900 dark:text-zinc-50">
+              {allowedCourtIds.length || "—"}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <p className="text-xs text-zinc-500">Partidos generados</p>
+            <p className="mt-1 font-semibold text-zinc-900 dark:text-zinc-50">
+              {flatRows.length}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {error ? (
+        <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200">
+          {error}
+        </p>
+      ) : null}
+
+      {workspace ? (
+        <details
+          className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+          open={configOpen}
+          onToggle={(e) =>
+            setConfigOpen((e.target as HTMLDetailsElement).open)
+          }
+        >
+          <summary className="cursor-pointer list-none px-5 py-4 marker:content-none [&::-webkit-details-marker]:hidden">
+            <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Configuración del itinerario
+            </span>
+            <span className="mt-1 block text-xs text-zinc-500">
+              Categoría, seeds, auto-itinerario y generar partidos
+            </span>
+          </summary>
+          <div className="border-t border-zinc-100 px-5 pb-5 pt-4 dark:border-zinc-800">
+            <div className="space-y-6">{scheduleConfigInner}</div>
+          </div>
+        </details>
+      ) : (
+        <div className="space-y-6">{scheduleConfigInner}</div>
+      )}
+
+      {workspace ? (
+        <>
+          <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-                Resultado
+                Bracket
               </p>
               <h3 className="mt-1 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-                Bracket, canchas y lista detallada
+                {selectedCategoryLabel}
               </h3>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setResultTab("bracket")}
-                className={tabButtonClass("bracket")}
-              >
-                Bracket
-              </button>
-              <button
-                type="button"
-                onClick={() => setResultTab("courts")}
-                className={tabButtonClass("courts")}
-              >
-                Canchas
-              </button>
-              <button
-                type="button"
-                onClick={() => setResultTab("list")}
-                className={tabButtonClass("list")}
-              >
-                Lista detallada
-              </button>
-            </div>
-          </div>
-          <div className="mt-5">
-            {resultTab === "bracket" ? (
+            <div className="mt-4 max-h-[min(70vh,720px)] overflow-auto pr-1">
               <ScheduleBracketView
                 schedule={existingCatSchedule}
                 categoryLabel={selectedCategoryLabel}
+                compact
+                onRequestEditMatch={(id) => openMatchEditor(id)}
               />
-            ) : resultTab === "courts" ? (
-              <ScheduleCourtsOverview tournament={tournament} />
-            ) : null}
-          </div>
-        </section>
+            </div>
+          </section>
+          <details className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <summary className="cursor-pointer list-none px-5 py-4 marker:content-none [&::-webkit-details-marker]:hidden">
+              <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                Ocupación por cancha
+              </span>
+              <span className="mt-1 block text-xs text-zinc-500">
+                Resumen global de canchas y partidos
+              </span>
+            </summary>
+            <div className="border-t border-zinc-100 px-5 pb-5 pt-4 dark:border-zinc-800">
+              <ScheduleCourtsOverview
+                tournament={tournament}
+                onMatchRequestEdit={(matchId, catId) =>
+                  openMatchEditor(matchId, catId)
+                }
+              />
+            </div>
+          </details>
+        </>
       ) : null}
 
-      {(!workspace || resultTab === "list") && existingCatSchedule && flatRows.length > 0 ? (
+      {!workspace && existingCatSchedule && flatRows.length > 0 ? (
         <div className="mt-8 overflow-x-auto">
           <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
             Partidos e itinerario
@@ -1245,10 +1272,29 @@ export function TournamentSchedulePanel({
         <p className="mt-6 text-sm text-zinc-500">
           Aún no hay partidos generados para esta categoría.
         </p>
-      ) : resultTab === "list" ? (
-        <p className="rounded-2xl border border-dashed border-zinc-300 p-5 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-          Aún no hay partidos generados para esta categoría.
-        </p>
+      ) : null}
+
+      {editingMatchId && editCatSchedule && editMatchView ? (
+        <MatchScheduleEditDialog
+          open
+          title={editMatchView.label}
+          subtitle={`${editCategoryLabel} · ${editMatchView.phaseTitle} · Ronda ${editMatchView.round + 1}`}
+          assignment={
+            editCatSchedule.assignments[editingMatchId] ??
+            ({} as ScheduleAssignmentMock)
+          }
+          scheduleDatetimeMin={scheduleDatetimeMin}
+          scheduleDatetimeMax={scheduleDatetimeMax}
+          tourCourts={tourCourts}
+          courtIdsForScheduleEdit={courtIdsForEditCategory}
+          onClose={() => {
+            setEditingMatchId(null);
+            setEditingCategoryId(null);
+          }}
+          onSave={(patch) => {
+            patchAssignment(editingMatchId, patch, editTargetCategoryId);
+          }}
+        />
       ) : null}
     </section>
   );

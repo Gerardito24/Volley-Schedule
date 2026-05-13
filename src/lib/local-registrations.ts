@@ -1,4 +1,5 @@
 import type { RegistrationRowMock } from "@/lib/mock-data";
+import { upsertRemoteRegistration } from "@/lib/remote-registrations";
 
 export const LOCAL_REGISTRATIONS_KEY = "volleyschedule-registrations-v1";
 
@@ -34,6 +35,9 @@ export function writeStoredRegistrations(rows: RegistrationRowMock[]): void {
 export function appendStoredRegistration(row: RegistrationRowMock): void {
   const existing = readStoredRegistrations();
   writeStoredRegistrations([...existing, row]);
+  void upsertRemoteRegistration(row).catch(() => {
+    // Railway/Postgres is optional during migration; localStorage remains fallback.
+  });
   notifyRegistrationsChanged();
 }
 
@@ -48,6 +52,9 @@ export function upsertStoredRegistration(row: RegistrationRowMock): void {
   } else {
     writeStoredRegistrations([...existing, row]);
   }
+  void upsertRemoteRegistration(row).catch(() => {
+    // Railway/Postgres is optional during migration; localStorage remains fallback.
+  });
   notifyRegistrationsChanged();
 }
 

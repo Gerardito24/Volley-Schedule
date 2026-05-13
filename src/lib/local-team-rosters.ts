@@ -1,4 +1,5 @@
 import type { TeamRoster } from "@/lib/team-roster-types";
+import { upsertRemoteRoster } from "@/lib/remote-rosters";
 
 export const LOCAL_ROSTERS_KEY = "volleyschedule-team-rosters-v1";
 
@@ -35,6 +36,9 @@ export function upsertStoredRoster(roster: TeamRoster): void {
   } else {
     writeStoredRosters([...existing, roster]);
   }
+  void upsertRemoteRoster(roster).catch(() => {
+    // Railway/Postgres is optional during migration; localStorage remains fallback.
+  });
   notify();
 }
 
@@ -72,6 +76,9 @@ export function createStubRosterFromRegistration(reg: {
     updatedAt: now,
   };
   writeStoredRosters([...existing, stub]);
+  void upsertRemoteRoster(stub).catch(() => {
+    // Railway/Postgres is optional during migration; localStorage remains fallback.
+  });
   notify();
   return stub;
 }

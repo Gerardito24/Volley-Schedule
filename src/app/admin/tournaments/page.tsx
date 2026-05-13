@@ -1,12 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { mergeAdminTournaments } from "@/lib/merge-tournaments";
-import { readStoredTournaments } from "@/lib/local-tournaments";
+import { useMemo } from "react";
+import { useMergedTournaments } from "@/hooks/use-merged-tournaments";
 import type { TournamentMock } from "@/lib/mock-data";
-import { tournaments as seedTournaments, formatTournamentLocationsLine } from "@/lib/mock-data";
+import { formatTournamentLocationsLine } from "@/lib/mock-data";
 import { minEffectiveFeeCents } from "@/lib/tournament-pricing";
 
 function formatMoney(cents: number) {
@@ -23,14 +21,7 @@ const statusLabel: Record<TournamentMock["status"], string> = {
 };
 
 export default function AdminTournamentsPage() {
-  const pathname = usePathname();
-  const [merged, setMerged] = useState<TournamentMock[]>(() =>
-    mergeAdminTournaments(seedTournaments, readStoredTournaments()),
-  );
-
-  useEffect(() => {
-    setMerged(mergeAdminTournaments(seedTournaments, readStoredTournaments()));
-  }, [pathname]);
+  const merged = useMergedTournaments();
 
   const sorted = useMemo(
     () =>

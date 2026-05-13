@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { TournamentSchedulePanel } from "@/components/admin/TournamentSchedulePanel";
+import { computeMergedTournaments } from "@/hooks/use-merged-tournaments";
 import {
   readStoredTournaments,
   VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED,
@@ -29,17 +30,20 @@ function AdminTournamentScheduleInner() {
     mergeAdminTournaments(seedTournaments, readStoredTournaments()),
   );
 
-  const refreshMerged = useCallback(() => {
-    setMerged(mergeAdminTournaments(seedTournaments, readStoredTournaments()));
+  const refreshMerged = useCallback(async () => {
+    setMerged(await computeMergedTournaments());
   }, []);
 
   useEffect(() => {
-    refreshMerged();
-    window.addEventListener(VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED, refreshMerged);
+    void refreshMerged();
+    const onStored = () => {
+      void refreshMerged();
+    };
+    window.addEventListener(VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED, onStored);
     return () =>
       window.removeEventListener(
         VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED,
-        refreshMerged,
+        onStored,
       );
   }, [slug, refreshMerged]);
 
@@ -94,7 +98,9 @@ function AdminTournamentScheduleInner() {
 
       <TournamentSchedulePanel
         tournament={tournament}
-        onScheduleSaved={refreshMerged}
+        onScheduleSaved={() => {
+          void refreshMerged();
+        }}
         workspace
       />
     </main>

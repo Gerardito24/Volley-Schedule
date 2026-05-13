@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { mergeAdminTournaments } from "@/lib/merge-tournaments";
-import { readStoredTournaments, VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED } from "@/lib/local-tournaments";
+import { computeMergedTournaments } from "@/hooks/use-merged-tournaments";
+import { VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED } from "@/lib/local-tournaments";
 import type { TournamentMock } from "@/lib/mock-data";
-import { tournaments as seedTournaments } from "@/lib/mock-data";
 import type { CategoryScheduleMock } from "@/lib/schedule-types";
 import { resolveSideToTeamLabel } from "@/lib/schedule-results";
 
@@ -53,13 +52,16 @@ export function PublicTournamentSchedule({ slug }: Props) {
   );
 
   useEffect(() => {
-    function load() {
-      const merged = mergeAdminTournaments(seedTournaments, readStoredTournaments());
+    async function load() {
+      const merged = await computeMergedTournaments();
       setTournament(merged.find((t) => t.slug === slug));
     }
-    load();
-    window.addEventListener(VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED, load);
-    return () => window.removeEventListener(VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED, load);
+    void load();
+    const onStored = () => {
+      void load();
+    };
+    window.addEventListener(VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED, onStored);
+    return () => window.removeEventListener(VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED, onStored);
   }, [slug]);
 
   const schedule = tournament?.schedule;

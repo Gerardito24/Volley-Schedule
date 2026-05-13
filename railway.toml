@@ -1,0 +1,4 @@
+# https://docs.railway.com/guides/config-as-code
+# Ejecuta el esquema SQL en Postgres antes de levantar la app en cada deploy.
+[deploy]
+releaseCommand = "npm run db:migrate"

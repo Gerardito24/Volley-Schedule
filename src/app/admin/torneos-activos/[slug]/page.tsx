@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { computeMergedTournaments } from "@/hooks/use-merged-tournaments";
 import {
   readStoredTournaments,
   upsertStoredTournament,
@@ -19,8 +20,13 @@ import {
   resolveSideToTeamLabel,
 } from "@/lib/schedule-results";
 
-function loadTournament(slug: string): TournamentMock | undefined {
+function loadTournamentSync(slug: string): TournamentMock | undefined {
   return mergeAdminTournaments(seedTournaments, readStoredTournaments()).find((t) => t.slug === slug);
+}
+
+async function loadTournamentAsync(slug: string): Promise<TournamentMock | undefined> {
+  const merged = await computeMergedTournaments();
+  return merged.find((t) => t.slug === slug);
 }
 
 function bracketMatchesForCategory(cs: CategoryScheduleMock) {
@@ -132,12 +138,16 @@ export default function TorneoActivoDetailPage() {
   const params = useParams();
   const slug = typeof params.slug === "string" ? params.slug : Array.isArray(params.slug) ? params.slug[0]! : "";
   const [tournament, setTournament] = useState<TournamentMock | undefined>(() =>
-    slug ? loadTournament(slug) : undefined,
+    slug ? loadTournamentSync(slug) : undefined,
   );
   const [categoryId, setCategoryId] = useState("");
 
   const refresh = useCallback(() => {
-    if (slug) setTournament(loadTournament(slug));
+    if (!slug) {
+      setTournament(undefined);
+      return;
+    }
+    void loadTournamentAsync(slug).then(setTournament);
   }, [slug]);
 
   useEffect(() => {

@@ -8,13 +8,13 @@ import {
   markActiveTournamentDone,
 } from "@/lib/active-tournaments-done";
 import { isInActiveTournamentWindow } from "@/lib/active-tournaments-window";
-import { readStoredTournaments, VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED } from "@/lib/local-tournaments";
-import { mergeAdminTournaments } from "@/lib/merge-tournaments";
-import { formatTournamentLocationsLine, tournaments as seedTournaments, CLUB_REGISTRY_SLUG } from "@/lib/mock-data";
+import { computeMergedTournaments } from "@/hooks/use-merged-tournaments";
+import { VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED } from "@/lib/local-tournaments";
+import { formatTournamentLocationsLine, CLUB_REGISTRY_SLUG } from "@/lib/mock-data";
 import type { TournamentMock } from "@/lib/mock-data";
 
-function reloadMerged(): TournamentMock[] {
-  return mergeAdminTournaments(seedTournaments, readStoredTournaments());
+function reloadMergedAsync(): Promise<TournamentMock[]> {
+  return computeMergedTournaments();
 }
 
 function isEligibleActiveTournament(t: TournamentMock): boolean {
@@ -28,12 +28,12 @@ function isEligibleActiveTournament(t: TournamentMock): boolean {
 }
 
 export default function TorneosActivosPage() {
-  const [list, setList] = useState<TournamentMock[]>(() =>
-    reloadMerged().filter(isEligibleActiveTournament),
-  );
+  const [list, setList] = useState<TournamentMock[]>([]);
 
   const refresh = useCallback(() => {
-    setList(reloadMerged().filter(isEligibleActiveTournament));
+    void reloadMergedAsync().then((merged) =>
+      setList(merged.filter(isEligibleActiveTournament)),
+    );
   }, []);
 
   useEffect(() => {

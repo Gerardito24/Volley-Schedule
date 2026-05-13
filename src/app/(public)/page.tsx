@@ -1,14 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
-  tournaments as seedTournaments,
   formatTournamentLocationsLine,
 } from "@/lib/mock-data";
 import type { TournamentMock } from "@/lib/mock-data";
-import { mergeAdminTournaments } from "@/lib/merge-tournaments";
-import { readStoredTournaments } from "@/lib/local-tournaments";
+import { useMergedTournaments } from "@/hooks/use-merged-tournaments";
 import {
   getActiveLiveTournaments,
   localDateString,
@@ -164,11 +162,7 @@ function TournamentCard({ t }: { t: TournamentMock }) {
 
 /* ─── Page ─── */
 export default function PublicHomePage() {
-  const [all, setAll] = useState<TournamentMock[]>([]);
-
-  useEffect(() => {
-    setAll(mergeAdminTournaments(seedTournaments, readStoredTournaments()));
-  }, []);
+  const all = useMergedTournaments();
 
   const today = localDateString(new Date());
 
