@@ -1,7 +1,13 @@
 import type {
+  CategoryScheduleMock,
   ScheduleAssignmentMock,
   SchedulePhaseMock,
 } from "@/lib/schedule-types";
+import {
+  courtRefsById,
+  resolveCourtIdFromAssignment,
+  type CourtRef,
+} from "@/lib/tournament-courts";
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -181,6 +187,228 @@ export function assignSlotsGreedy(input: {
   return { ok: true, assignments };
 }
 
+/** Intervalo ocupado en una cancha global (p. ej. otra categoría). */
+export type OccupancyBlock = {
+  courtId: string;
+  startMs: number;
+  endMs: number;
+};
+
+/**
+ * Primer instante `>= fromMs` donde cabe `[t, t + durationMs)` sin solapar bloques
+ * de esa cancha y dentro de `[winStartMs, winEndExclMs)`.
+ */
+export function earliestFreeSlot(input: {
+  fromMs: number;
+  durationMs: number;
+  courtId: string;
+  blocks: OccupancyBlock[];
+  winStartMs: number;
+  winEndExclMs: number;
+}): number | null {
+  const { durationMs, courtId, winEndExclMs, blocks, winStartMs } = input;
+  let t = Math.max(input.fromMs, winStartMs);
+  const relevant = blocks
+    .filter((b) => b.courtId === courtId)
+    .sort((a, b) => a.startMs - b.startMs);
+
+  for (let guard = 0; guard < 5000; guard++) {
+    if (t + durationMs > winEndExclMs) return null;
+    let bumped = false;
+    for (const b of relevant) {
+      if (intervalsOverlap(t, t + durationMs, b.startMs, b.endMs)) {
+        t = Math.max(t, b.endMs);
+        bumped = true;
+      }
+    }
+    if (!bumped) return t;
+  }
+  return null;
+}
+
+export function buildOccupancyFromSchedules(
+  categorySchedules: CategoryScheduleMock[],
+  courts: CourtRef[],
+  excludeCategoryId: string | null,
+): OccupancyBlock[] {
+  const out: OccupancyBlock[] = [];
+  for (const cat of categorySchedules) {
+    if (excludeCategoryId != null && cat.categoryId === excludeCategoryId) {
+      continue;
+    }
+    const dur = cat.schedulingMeta?.durationMinutes;
+    if (dur == null || dur <= 0) continue;
+    const ordered = buildOrderedMatchIds(cat.phases);
+    for (const mid of ordered) {
+      const as = cat.assignments[mid];
+      if (!as?.startsAt) continue;
+      const cid = resolveCourtIdFromAssignment(as, courts);
+      if (!cid) continue;
+      const st = parseFlexibleLocalDatetime(as.startsAt);
+      if (!st || Number.isNaN(st.getTime())) continue;
+      out.push({
+        courtId: cid,
+        startMs: st.getTime(),
+        endMs: st.getTime() + dur * 60_000,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Asignación voraz con canchas globales (`allowedCourtIds`) y ocupación previa
+ * (otras categorías). Cada partido guarda `courtId` + `courtLabel` legible.
+ */
+export function assignSlotsGreedyShared(input: {
+  phases: SchedulePhaseMock[];
+  firstStart: Date;
+  durationMinutes: number;
+  allowedCourtIds: string[];
+  courts: CourtRef[];
+  existingOccupancy: OccupancyBlock[];
+  tournamentStartsOn: string;
+  tournamentEndsOn: string;
+}):
+  | { ok: true; assignments: Record<string, ScheduleAssignmentMock> }
+  | { ok: false; error: string } {
+  const {
+    phases,
+    firstStart,
+    durationMinutes,
+    allowedCourtIds,
+    courts,
+    existingOccupancy,
+    tournamentStartsOn,
+    tournamentEndsOn,
+  } = input;
+
+  const courtCount = allowedCourtIds.length;
+  if (!Number.isInteger(courtCount) || courtCount < 1) {
+    return { ok: false, error: "Tenés que elegir al menos una cancha." };
+  }
+  if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+    return { ok: false, error: "Duración por juego inválida." };
+  }
+
+  const idSet = courtRefsById(courts);
+  for (const id of allowedCourtIds) {
+    if (!idSet.has(id)) {
+      return {
+        ok: false,
+        error:
+          "Una de las canchas elegidas no existe en las sedes del torneo. Revisá ubicaciones y canchas.",
+      };
+    }
+  }
+
+  if (
+    !isFirstStartDateInTournamentRange(
+      firstStart,
+      tournamentStartsOn,
+      tournamentEndsOn,
+    )
+  ) {
+    return {
+      ok: false,
+      error:
+        "La fecha y hora del primer partido deben caer en un día entre el inicio y el fin del torneo.",
+    };
+  }
+
+  const winStart = localMidnight(tournamentStartsOn);
+  const winEndExcl = tournamentExclusiveEnd(tournamentEndsOn);
+  const winStartMs = winStart.getTime();
+  const winEndExclMs = winEndExcl.getTime();
+  if (firstStart < winStart) {
+    return { ok: false, error: "El primer partido es anterior al inicio del torneo." };
+  }
+
+  const matchIds = buildOrderedMatchIds(phases);
+  const durationMs = durationMinutes * 60_000;
+  const mergedBlocks: OccupancyBlock[] = [...existingOccupancy];
+
+  const nextAvailable: number[] = [];
+  for (let i = 0; i < courtCount; i++) {
+    const courtId = allowedCourtIds[i]!;
+    const slot = earliestFreeSlot({
+      fromMs: firstStart.getTime(),
+      durationMs,
+      courtId,
+      blocks: mergedBlocks,
+      winStartMs,
+      winEndExclMs,
+    });
+    if (slot == null) {
+      return {
+        ok: false,
+        error:
+          "Con las canchas elegidas y el horario de otras categorías, no hay hueco para el primer partido. Cambiá la hora inicial, las canchas, la duración u otras categorías.",
+      };
+    }
+    nextAvailable.push(slot);
+  }
+
+  const assignments: Record<string, ScheduleAssignmentMock> = {};
+
+  for (const matchId of matchIds) {
+    let bestIdx = 0;
+    let bestT = nextAvailable[0]!;
+    for (let i = 1; i < courtCount; i++) {
+      const t = nextAvailable[i]!;
+      if (t < bestT) {
+        bestT = t;
+        bestIdx = i;
+      }
+    }
+
+    const courtId = allowedCourtIds[bestIdx]!;
+    const startMs = earliestFreeSlot({
+      fromMs: bestT,
+      durationMs,
+      courtId,
+      blocks: mergedBlocks,
+      winStartMs,
+      winEndExclMs,
+    });
+    if (startMs == null) {
+      return {
+        ok: false,
+        error:
+          "No caben todos los partidos: choca con otras categorías o con el calendario del torneo. Ajustá horarios, canchas o duración.",
+      };
+    }
+    const endMs = startMs + durationMs;
+    if (startMs < winStartMs || endMs > winEndExclMs) {
+      return {
+        ok: false,
+        error:
+          "No caben todos los partidos dentro de las fechas del torneo con la duración y canchas indicadas. Ajusta horario inicial, duración, más canchas o acorta el torneo.",
+      };
+    }
+
+    const ref = idSet.get(courtId);
+    assignments[matchId] = {
+      startsAt: formatDatetimeLocalSeconds(new Date(startMs)),
+      courtLabel: ref?.label ?? courtId,
+      courtId,
+    };
+    mergedBlocks.push({ courtId, startMs, endMs });
+
+    const nextSlot = earliestFreeSlot({
+      fromMs: endMs,
+      durationMs,
+      courtId,
+      blocks: mergedBlocks,
+      winStartMs,
+      winEndExclMs,
+    });
+    nextAvailable[bestIdx] = nextSlot ?? Number.POSITIVE_INFINITY;
+  }
+
+  return { ok: true, assignments };
+}
+
 function intervalsOverlap(
   aStart: number,
   aEnd: number,
@@ -221,6 +449,77 @@ export function findAssignmentConflict(
 
     if (intervalsOverlap(selfStart.getTime(), selfEnd, oStart.getTime(), oEnd)) {
       return `Conflicto: la ${self.courtLabel} ya tiene un partido en ese horario.`;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Solapes entre categorías y dentro de la misma categoría (duración distinta por categoría).
+ */
+export function findGlobalAssignmentConflict(input: {
+  categorySchedules: CategoryScheduleMock[];
+  courts: CourtRef[];
+  focusCategoryId: string;
+  focusMatchId: string;
+  focusAssignments: Record<string, ScheduleAssignmentMock>;
+  focusDurationMinutes: number;
+}): string | null {
+  const {
+    categorySchedules,
+    courts,
+    focusCategoryId,
+    focusMatchId,
+    focusAssignments,
+    focusDurationMinutes,
+  } = input;
+
+  const self = focusAssignments[focusMatchId];
+  if (!self?.startsAt) return null;
+
+  const selfCourtId = resolveCourtIdFromAssignment(self, courts);
+  if (!selfCourtId) {
+    return "No se reconoce la cancha. Elegí una cancha de la lista del torneo.";
+  }
+
+  const selfStart = parseFlexibleLocalDatetime(self.startsAt);
+  if (!selfStart || Number.isNaN(selfStart.getTime())) {
+    return "Hora de juego inválida.";
+  }
+  const selfEnd = selfStart.getTime() + focusDurationMinutes * 60_000;
+  const label =
+    courts.find((c) => c.id === selfCourtId)?.label ??
+    self.courtLabel ??
+    "esa cancha";
+
+  for (const cat of categorySchedules) {
+    const dur = cat.schedulingMeta?.durationMinutes;
+    if (dur == null || dur <= 0) continue;
+
+    const assignMap =
+      cat.categoryId === focusCategoryId ? focusAssignments : cat.assignments;
+    const ordered = buildOrderedMatchIds(cat.phases);
+
+    for (const otherId of ordered) {
+      if (cat.categoryId === focusCategoryId && otherId === focusMatchId) {
+        continue;
+      }
+
+      const other = assignMap[otherId];
+      if (!other?.startsAt) continue;
+      const otherCourtId = resolveCourtIdFromAssignment(other, courts);
+      if (!otherCourtId || otherCourtId !== selfCourtId) continue;
+
+      const oStart = parseFlexibleLocalDatetime(other.startsAt);
+      if (!oStart || Number.isNaN(oStart.getTime())) continue;
+      const oEnd = oStart.getTime() + dur * 60_000;
+
+      if (intervalsOverlap(selfStart.getTime(), selfEnd, oStart.getTime(), oEnd)) {
+        const scope =
+          cat.categoryId === focusCategoryId ? "en esta categoría" : "en otra categoría";
+        return `Conflicto: ${label} ya tiene un partido en ese horario (${scope}).`;
+      }
     }
   }
 

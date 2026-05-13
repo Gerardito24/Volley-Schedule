@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RegistrationRowMock } from "@/lib/mock-data";
 import { upsertStoredRegistration } from "@/lib/local-registrations";
@@ -80,10 +80,11 @@ export function RegistrationTable({
   hideTournamentColumn?: boolean;
   /** Demo: guardar nuevo estado en localStorage y refrescar tablas mergeadas. */
   allowLocalStatusEdit?: boolean;
-  /** Hoja lateral, PDF por fila, doble clic para editar celdas. */
+  /** PDF por fila, fila clicable al detalle, doble clic para editar celdas. */
   registrationTools?: boolean;
 }) {
   const tools = Boolean(registrationTools);
+  const router = useRouter();
 
   const [editing, setEditing] = useState<{
     rowId: string;
@@ -169,6 +170,7 @@ export function RegistrationTable({
               ? "Doble clic para editar"
               : undefined
           }
+          onClick={tools ? (e) => e.stopPropagation() : undefined}
           onDoubleClick={(e) => {
             e.preventDefault();
             beginEdit(r, field);
@@ -208,8 +210,9 @@ export function RegistrationTable({
           {tools ? (
             <>
               {" "}
-              <strong>Doble clic</strong> en torneo/división/equipo/tarifa/fecha
-              para editar. <strong>Abrir</strong> muestra la hoja completa.
+              <strong>Clic</strong> en la fila o en el club para el detalle (con
+              roster). <strong>Doble clic</strong> en torneo/división/equipo/tarifa/fecha
+              para editar. <strong>PDF</strong> descarga la hoja.
             </>
           ) : null}
         </p>
@@ -227,7 +230,7 @@ export function RegistrationTable({
             <tr>
               {tools ? (
                 <th className="px-4 py-3 text-left font-medium text-zinc-700 dark:text-zinc-300">
-                  Hoja
+                  Acciones
                 </th>
               ) : null}
               {!hideTournamentColumn ? (
@@ -262,24 +265,48 @@ export function RegistrationTable({
           </thead>
           <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
             {rows.map((r) => (
-              <tr key={r.id} className={tools ? "hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40" : ""}>
+              <tr
+                key={r.id}
+                role={tools ? "link" : undefined}
+                tabIndex={tools ? 0 : undefined}
+                className={
+                  tools
+                    ? "cursor-pointer hover:bg-zinc-50/80 dark:hover:bg-zinc-900/40"
+                    : ""
+                }
+                onClick={
+                  tools
+                    ? () =>
+                        router.push(
+                          `/admin/registrations/${encodeURIComponent(r.id)}`,
+                        )
+                    : undefined
+                }
+                onKeyDown={
+                  tools
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          router.push(
+                            `/admin/registrations/${encodeURIComponent(r.id)}`,
+                          );
+                        }
+                      }
+                    : undefined
+                }
+              >
                 {tools ? (
-                  <td className="whitespace-nowrap px-4 py-3">
-                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
-                      <Link
-                        href={`/admin/registrations/${encodeURIComponent(r.id)}`}
-                        className="rounded-lg border border-zinc-300 bg-white px-2.5 py-1 text-xs font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                      >
-                        Abrir
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => downloadRegistrationPdf(r)}
-                        className="rounded-lg border border-emerald-600/40 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-900 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-100 dark:hover:bg-emerald-900/40"
-                      >
-                        PDF
-                      </button>
-                    </div>
+                  <td
+                    className="whitespace-nowrap px-4 py-3"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => downloadRegistrationPdf(r)}
+                      className="rounded-lg border border-emerald-600/40 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-900 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-100 dark:hover:bg-emerald-900/40"
+                    >
+                      PDF
+                    </button>
                   </td>
                 ) : null}
                 {!hideTournamentColumn
@@ -311,6 +338,7 @@ export function RegistrationTable({
                 {allowLocalStatusEdit ? (
                   <td
                     className="whitespace-nowrap px-4 py-3"
+                    onClick={(e) => e.stopPropagation()}
                     onDoubleClick={(e) => e.stopPropagation()}
                   >
                     <select

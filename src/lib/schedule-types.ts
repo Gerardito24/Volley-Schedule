@@ -55,12 +55,17 @@ export type ScheduleAssignmentMock = {
   /** ISO local datetime string o fecha + hora acordada para el UI (datetime-local). */
   startsAt?: string;
   courtLabel?: string;
+  /** Id global de cancha (p. ej. v0-c1); opcional en datos legacy. */
+  courtId?: string;
 };
 
 /** Metadatos para validar solapes al editar hora/cancha manualmente. */
 export type CategorySchedulingMetaMock = {
   durationMinutes: number;
+  /** Igual a `allowedCourtIds.length` cuando hay subset explícito. */
   courtCount: number;
+  /** Subconjunto de canchas del torneo que usa esta categoría (ids de flatten). */
+  allowedCourtIds?: string[];
 };
 
 export type CategoryScheduleMock = {

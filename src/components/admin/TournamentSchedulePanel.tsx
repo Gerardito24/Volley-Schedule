@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { CategoryMock, RegistrationRowMock, TournamentMock } from "@/lib/mock-data";
 import {
   displayCategoryName,
@@ -22,9 +22,11 @@ import type {
   TournamentScheduleMock,
 } from "@/lib/schedule-types";
 import {
-  assignSlotsGreedy,
+  assignSlotsGreedyShared,
+  buildOccupancyFromSchedules,
   buildOrderedMatchIds,
   findAssignmentConflict,
+  findGlobalAssignmentConflict,
   isFirstStartDateInTournamentRange,
   parseDurationToMinutes,
   parseFlexibleLocalDatetime,
@@ -33,6 +35,12 @@ import {
 import { SCHEDULE_TEMPLATE_OPTIONS } from "@/lib/schedule-templates";
 import { generatePoolsToBracketPhases } from "@/lib/schedule-templates/generate-pools-bracket";
 import { generateSingleEliminationPhase } from "@/lib/schedule-templates/generate-single-elim";
+import {
+  flattenTournamentCourts,
+  resolveCourtIdFromAssignment,
+  tournamentHasSchedulableCourts,
+  type CourtRef,
+} from "@/lib/tournament-courts";
 
 type Props = {
   tournament: TournamentMock;
@@ -65,6 +73,11 @@ function normalizeDatetimeLocalSeconds(raw: string): string {
   const t = raw.trim();
   if (t.length === 16 && t.includes("T")) return `${t}:00`;
   return t;
+}
+
+function sortCourtIdsByVenueOrder(ids: string[], courts: CourtRef[]): string[] {
+  const order = new Map(courts.map((c, i) => [c.id, i]));
+  return [...ids].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
 }
 
 function matchesSubdivisionFilter(
@@ -103,11 +116,21 @@ export function TournamentSchedulePanel({
   /** Valor del input datetime-local (sin segundos); sin valor por defecto al cargar. */
   const [firstMatchDatetime, setFirstMatchDatetime] = useState("");
   const [durationInput, setDurationInput] = useState("");
-  const [courtCountInput, setCourtCountInput] = useState("");
+  const [allowedCourtIds, setAllowedCourtIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
   const [manualText, setManualText] = useState("");
   const [listRevision, setListRevision] = useState(0);
+
+  const venuesKey = JSON.stringify(tournament.venues);
+  const tourCourts = useMemo(
+    () => flattenTournamentCourts(tournament.venues),
+    [venuesKey],
+  );
+  const hasSchedulableVenueCourts = useMemo(
+    () => tournamentHasSchedulableCourts(tournament.venues),
+    [venuesKey],
+  );
 
   const selectedCategory = useMemo(
     () => categories.find((c) => c.id === categoryId),
@@ -213,12 +236,25 @@ export function TournamentSchedulePanel({
       const h = Math.floor(meta.durationMinutes / 60);
       const m = meta.durationMinutes % 60;
       setDurationInput(`${h}:${String(m).padStart(2, "0")}`);
-      setCourtCountInput(String(meta.courtCount));
     } else {
       setDurationInput("");
-      setCourtCountInput("");
     }
   }, [categoryId, existingCatSchedule?.schedulingMeta]);
+
+  useEffect(() => {
+    const meta = existingCatSchedule?.schedulingMeta;
+    const allIds = tourCourts.map((c) => c.id);
+    if (meta?.allowedCourtIds && meta.allowedCourtIds.length > 0) {
+      const kept = meta.allowedCourtIds.filter((id) => allIds.includes(id));
+      setAllowedCourtIds(
+        kept.length > 0 ? sortCourtIdsByVenueOrder(kept, tourCourts) : [...allIds],
+      );
+    } else if (allIds.length > 0) {
+      setAllowedCourtIds([...allIds]);
+    } else {
+      setAllowedCourtIds([]);
+    }
+  }, [categoryId, existingCatSchedule?.schedulingMeta, tourCourts]);
 
   const scheduleDatetimeMin = `${tournament.tournamentStartsOn}T00:00`;
   const scheduleDatetimeMax = `${tournament.tournamentEndsOn}T23:59`;
@@ -228,6 +264,18 @@ export function TournamentSchedulePanel({
     const all = existingCatSchedule.phases.flatMap((p) => p.matches);
     return buildMatchOrderIndex(all);
   }, [existingCatSchedule]);
+
+  const courtIdsForScheduleEdit = useMemo(() => {
+    if (!existingCatSchedule) return tourCourts.map((c) => c.id);
+    const meta = existingCatSchedule.schedulingMeta;
+    if (meta?.allowedCourtIds?.length) {
+      return sortCourtIdsByVenueOrder(
+        meta.allowedCourtIds.filter((id) => tourCourts.some((t) => t.id === id)),
+        tourCourts,
+      );
+    }
+    return tourCourts.map((c) => c.id);
+  }, [existingCatSchedule, tourCourts]);
 
   const flatRows = useMemo(() => {
     if (!existingCatSchedule) return [];
@@ -279,6 +327,19 @@ export function TournamentSchedulePanel({
     return slotRows.map((s) => {
       if (s.kind === "manual") return s.label;
       return regById.get(s.registrationId)?.teamName ?? "(equipo desconocido)";
+    });
+  }
+
+  function toggleAllowedCourt(courtId: string) {
+    setAllowedCourtIds((prev) => {
+      if (prev.includes(courtId)) {
+        if (prev.length <= 1) return prev;
+        return sortCourtIdsByVenueOrder(
+          prev.filter((x) => x !== courtId),
+          tourCourts,
+        );
+      }
+      return sortCourtIdsByVenueOrder([...prev, courtId], tourCourts);
     });
   }
 
@@ -361,9 +422,16 @@ export function TournamentSchedulePanel({
       return;
     }
 
-    const courtCount = Number.parseInt(courtCountInput.trim(), 10);
-    if (!Number.isInteger(courtCount) || courtCount < 1) {
-      setError("Indica un número de canchas entero mayor o igual a 1.");
+    if (!hasSchedulableVenueCourts) {
+      setError(
+        "Definí al menos una sede con cantidad de canchas (número entero ≥ 1) en la ficha del torneo, sección Ubicaciones y canchas.",
+      );
+      return;
+    }
+
+    const sortedAllowed = sortCourtIdsByVenueOrder(allowedCourtIds, tourCourts);
+    if (sortedAllowed.length < 1) {
+      setError("Marcá al menos una cancha que pueda usar esta categoría.");
       return;
     }
 
@@ -394,11 +462,19 @@ export function TournamentSchedulePanel({
         phases = [poolsPhase, bracketPhase];
       }
 
-      const assigned = assignSlotsGreedy({
+      const existingOccupancy = buildOccupancyFromSchedules(
+        tournament.schedule?.categorySchedules ?? [],
+        tourCourts,
+        categoryId,
+      );
+
+      const assigned = assignSlotsGreedyShared({
         phases,
         firstStart,
         durationMinutes,
-        courtCount,
+        allowedCourtIds: sortedAllowed,
+        courts: tourCourts,
+        existingOccupancy,
         tournamentStartsOn: tournament.tournamentStartsOn,
         tournamentEndsOn: tournament.tournamentEndsOn,
       });
@@ -413,7 +489,11 @@ export function TournamentSchedulePanel({
         teamLabels: labels,
         phases,
         assignments: assigned.assignments,
-        schedulingMeta: { durationMinutes, courtCount },
+        schedulingMeta: {
+          durationMinutes,
+          courtCount: sortedAllowed.length,
+          allowedCourtIds: sortedAllowed,
+        },
       };
 
       const others =
@@ -482,15 +562,49 @@ export function TournamentSchedulePanel({
       merged.startsAt &&
       merged.courtLabel
     ) {
-      const conflict = findAssignmentConflict(
-        nextAssign,
-        ordered,
-        meta.durationMinutes,
-        matchId,
-      );
-      if (conflict) {
-        setError(conflict);
-        return;
+      if (
+        tourCourts.length > 0 &&
+        meta.allowedCourtIds &&
+        meta.allowedCourtIds.length > 0
+      ) {
+        const cid = resolveCourtIdFromAssignment(merged, tourCourts);
+        if (cid && !meta.allowedCourtIds.includes(cid)) {
+          setError(
+            "Esa cancha no está habilitada para esta categoría. Marcala en «Canchas que usa esta categoría» o elegí otra.",
+          );
+          return;
+        }
+      }
+
+      if (tourCourts.length > 0) {
+        const mergedSchedules = (
+          tournament.schedule?.categorySchedules ?? []
+        ).map((c) =>
+          c.categoryId === categoryId ? { ...c, assignments: nextAssign } : c,
+        );
+        const conflict = findGlobalAssignmentConflict({
+          categorySchedules: mergedSchedules,
+          courts: tourCourts,
+          focusCategoryId: categoryId,
+          focusMatchId: matchId,
+          focusAssignments: nextAssign,
+          focusDurationMinutes: meta.durationMinutes,
+        });
+        if (conflict) {
+          setError(conflict);
+          return;
+        }
+      } else {
+        const conflict = findAssignmentConflict(
+          nextAssign,
+          ordered,
+          meta.durationMinutes,
+          matchId,
+        );
+        if (conflict) {
+          setError(conflict);
+          return;
+        }
       }
     }
 
@@ -529,6 +643,12 @@ export function TournamentSchedulePanel({
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
         Inscripciones <strong>pagadas</strong> o <strong>aprobadas</strong>, orden por fecha. Reordená y generá el bracket; todo queda en este navegador.
       </p>
+
+      {!hasSchedulableVenueCourts ? (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          Para planificar canchas compartidas entre categorías, definí cuántas canchas tiene cada sede en la ficha del torneo (Ubicaciones y canchas).
+        </p>
+      ) : null}
 
       {error ? (
         <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200">
@@ -767,7 +887,7 @@ export function TournamentSchedulePanel({
           comprueba que la fecha caiga en ese intervalo; la validación lo
           comprueba al guardar.
         </p>
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-1">
             <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
               Fecha y hora del primer partido
@@ -799,20 +919,45 @@ export function TournamentSchedulePanel({
               enteros (ej. 90).
             </p>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-              Número de canchas
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={32}
-              value={courtCountInput}
-              onChange={(e) => setCourtCountInput(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-950"
-            />
-          </div>
         </div>
+
+        {hasSchedulableVenueCourts ? (
+          <div className="mt-4">
+            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              Canchas que usa esta categoría
+            </p>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              Solo estas canchas entran en el auto-itinerario. Se respetan los
+              horarios de otras categorías en las mismas canchas.
+            </p>
+            <div className="mt-2 flex flex-col gap-3">
+              {tourCourts.map((c, idx) => {
+                const prev = tourCourts[idx - 1];
+                const showVenueHeader =
+                  !prev || prev.venueIndex !== c.venueIndex;
+                return (
+                  <Fragment key={c.id}>
+                    {showVenueHeader ? (
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                        {c.venueLabel}
+                      </p>
+                    ) : null}
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-800 dark:text-zinc-200">
+                      <input
+                        type="checkbox"
+                        className="rounded border-zinc-300"
+                        checked={allowedCourtIds.includes(c.id)}
+                        onChange={() => toggleAllowedCourt(c.id)}
+                      />
+                      <span>Cancha {c.courtNumber}</span>
+                      <span className="text-xs text-zinc-500">({c.label})</span>
+                    </label>
+                  </Fragment>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-3">
@@ -894,17 +1039,44 @@ export function TournamentSchedulePanel({
                       />
                     </td>
                     <td className="py-2">
-                      <input
-                        type="text"
-                        placeholder="Cancha 1"
-                        value={as.courtLabel ?? ""}
-                        onChange={(e) =>
-                          patchAssignment(row.matchId, {
-                            courtLabel: e.target.value || undefined,
-                          })
-                        }
-                        className="w-full min-w-[6rem] rounded border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-950"
-                      />
+                      {tourCourts.length > 0 ? (
+                        <select
+                          value={
+                            resolveCourtIdFromAssignment(as, tourCourts) ?? ""
+                          }
+                          onChange={(e) => {
+                            const id = e.target.value;
+                            const ref = tourCourts.find((c) => c.id === id);
+                            patchAssignment(row.matchId, {
+                              courtId: id || undefined,
+                              courtLabel: ref?.label,
+                            });
+                          }}
+                          className="w-full min-w-[10rem] rounded border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-950"
+                        >
+                          <option value="">—</option>
+                          {courtIdsForScheduleEdit.map((cid) => {
+                            const ref = tourCourts.find((c) => c.id === cid);
+                            return (
+                              <option key={cid} value={cid}>
+                                {ref?.label ?? cid}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder="Cancha 1"
+                          value={as.courtLabel ?? ""}
+                          onChange={(e) =>
+                            patchAssignment(row.matchId, {
+                              courtLabel: e.target.value || undefined,
+                            })
+                          }
+                          className="w-full min-w-[6rem] rounded border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-950"
+                        />
+                      )}
                     </td>
                   </tr>
                 );

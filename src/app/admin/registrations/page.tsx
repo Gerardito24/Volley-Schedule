@@ -10,9 +10,9 @@ export default function AdminRegistrationsPage() {
             Inscripciones
           </h1>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Panel para organizadores. <strong>Abrir</strong> navega a la página de
-            detalle; <strong>PDF</strong> descarga la hoja; doble clic en celdas
-            para editar en lista.
+            Panel para organizadores. <strong>Clic</strong> en la fila o en el club
+            para el detalle (incluye roster); <strong>PDF</strong> descarga la hoja;
+            <strong> doble clic</strong> en celdas editables en la lista.
           </p>
         </div>
         <Link

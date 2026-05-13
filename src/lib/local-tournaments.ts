@@ -158,21 +158,31 @@ function isScheduleAssignmentMock(value: unknown): value is ScheduleAssignmentMo
     o.courtLabel === undefined ||
     o.courtLabel === null ||
     typeof o.courtLabel === "string";
-  return startsOk && courtOk;
+  const courtIdOk =
+    o.courtId === undefined || o.courtId === null || typeof o.courtId === "string";
+  return startsOk && courtOk && courtIdOk;
 }
 
 function isCategorySchedulingMetaMock(value: unknown): boolean {
   if (value === undefined || value === null) return true;
   if (!value || typeof value !== "object") return false;
   const o = value as Record<string, unknown>;
-  return (
+  const base =
     typeof o.durationMinutes === "number" &&
     Number.isInteger(o.durationMinutes) &&
     o.durationMinutes > 0 &&
     typeof o.courtCount === "number" &&
     Number.isInteger(o.courtCount) &&
-    o.courtCount >= 1
-  );
+    o.courtCount >= 1;
+  if (!base) return false;
+  if (o.allowedCourtIds === undefined || o.allowedCourtIds === null) return true;
+  if (!Array.isArray(o.allowedCourtIds)) return false;
+  if (o.allowedCourtIds.length === 0) return false;
+  if (!o.allowedCourtIds.every((x: unknown) => typeof x === "string" && x.length > 0)) {
+    return false;
+  }
+  if (o.allowedCourtIds.length !== o.courtCount) return false;
+  return true;
 }
 
 function isCategoryScheduleMock(value: unknown): value is CategoryScheduleMock {

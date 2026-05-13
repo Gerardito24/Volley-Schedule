@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
-import type { SchedulePhaseMock } from "@/lib/schedule-types";
+import type { CategoryScheduleMock, SchedulePhaseMock } from "@/lib/schedule-types";
 import {
   assignSlotsGreedy,
+  assignSlotsGreedyShared,
+  buildOccupancyFromSchedules,
   buildOrderedMatchIds,
+  findGlobalAssignmentConflict,
   parseDurationToMinutes,
   parseFlexibleLocalDatetime,
 } from "@/lib/schedule-auto-assign";
+import { flattenTournamentCourts } from "@/lib/tournament-courts";
 
 describe("parseDurationToMinutes", () => {
   it("acepta H:mm y HH:mm", () => {
@@ -110,5 +114,124 @@ describe("assignSlotsGreedy", () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.error).toMatch(/No caben todos/i);
+  });
+});
+
+describe("assignSlotsGreedyShared", () => {
+  const courts = flattenTournamentCourts([{ label: "Arena", courtCount: 2 }]);
+  const day = "2026-06-15";
+  const t8 = parseFlexibleLocalDatetime(`${day}T08:00:00`)!;
+  const t10 = parseFlexibleLocalDatetime(`${day}T10:00:00`)!;
+
+  it("empuja el inicio si otra categoría ocupa ambas canchas 8–10", () => {
+    const phases = [
+      minimalPhase([
+        { id: "m1", round: 0, order: 0 },
+        { id: "m2", round: 0, order: 1 },
+      ]),
+    ];
+    const existing = [
+      { courtId: "v0-c1", startMs: t8.getTime(), endMs: t10.getTime() },
+      { courtId: "v0-c2", startMs: t8.getTime(), endMs: t10.getTime() },
+    ];
+    const res = assignSlotsGreedyShared({
+      phases,
+      firstStart: t8,
+      durationMinutes: 60,
+      allowedCourtIds: ["v0-c1", "v0-c2"],
+      courts,
+      existingOccupancy: existing,
+      tournamentStartsOn: day,
+      tournamentEndsOn: "2026-06-20",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const tFirst = parseFlexibleLocalDatetime(res.assignments.m1!.startsAt!)!.getTime();
+    expect(tFirst).toBe(t10.getTime());
+    expect(res.assignments.m1?.courtId).toBeDefined();
+    expect(res.assignments.m1?.courtLabel).toContain("Arena");
+  });
+
+  it("buildOccupancyFromSchedules respeta excludeCategoryId", () => {
+    const catA: CategoryScheduleMock = {
+      categoryId: "cat-a",
+      teamLabels: ["x", "y"],
+      phases: [minimalPhase([{ id: "x1", round: 0, order: 0 }])],
+      assignments: {
+        x1: {
+          startsAt: "2026-06-15T08:00:00",
+          courtLabel: courts[0]!.label,
+          courtId: "v0-c1",
+        },
+      },
+      schedulingMeta: { durationMinutes: 60, courtCount: 1, allowedCourtIds: ["v0-c1"] },
+    };
+    const occ = buildOccupancyFromSchedules([catA], courts, "cat-a");
+    expect(occ).toHaveLength(0);
+    const occ2 = buildOccupancyFromSchedules([catA], courts, null);
+    expect(occ2).toHaveLength(1);
+  });
+});
+
+describe("findGlobalAssignmentConflict", () => {
+  const courts = flattenTournamentCourts([{ label: "Arena", courtCount: 1 }]);
+  const cat: CategoryScheduleMock = {
+    categoryId: "c1",
+    teamLabels: ["a", "b"],
+    phases: [
+      minimalPhase([
+        { id: "m1", round: 0, order: 0 },
+        { id: "m2", round: 0, order: 1 },
+      ]),
+    ],
+    assignments: {
+      m1: {
+        startsAt: "2026-06-15T08:00:00",
+        courtLabel: courts[0]!.label,
+        courtId: "v0-c1",
+      },
+      m2: {
+        startsAt: "2026-06-15T10:00:00",
+        courtLabel: courts[0]!.label,
+        courtId: "v0-c1",
+      },
+    },
+    schedulingMeta: { durationMinutes: 60, courtCount: 1, allowedCourtIds: ["v0-c1"] },
+  };
+
+  it("detecta solape con otra categoría", () => {
+    const other: CategoryScheduleMock = {
+      ...cat,
+      categoryId: "c2",
+      assignments: {
+        o1: {
+          startsAt: "2026-06-15T08:30:00",
+          courtLabel: courts[0]!.label,
+          courtId: "v0-c1",
+        },
+      },
+      phases: [minimalPhase([{ id: "o1", round: 0, order: 0 }])],
+    };
+    const msg = findGlobalAssignmentConflict({
+      categorySchedules: [cat, other],
+      courts,
+      focusCategoryId: "c2",
+      focusMatchId: "o1",
+      focusAssignments: other.assignments,
+      focusDurationMinutes: 60,
+    });
+    expect(msg).toMatch(/otra categoría/i);
+  });
+
+  it("no hay conflicto si horarios no se solapan", () => {
+    const msg = findGlobalAssignmentConflict({
+      categorySchedules: [cat],
+      courts,
+      focusCategoryId: "c1",
+      focusMatchId: "m2",
+      focusAssignments: cat.assignments,
+      focusDurationMinutes: 60,
+    });
+    expect(msg).toBeNull();
   });
 });

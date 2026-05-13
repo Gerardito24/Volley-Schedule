@@ -7,10 +7,14 @@ import {
   readStoredRegistrations,
   upsertStoredRegistration,
 } from "@/lib/local-registrations";
+import { readStoredRosters, LOCAL_ROSTERS_KEY } from "@/lib/local-team-rosters";
 import { mergeAdminRegistrations } from "@/lib/merge-registrations";
+import { mergeTeamRosters } from "@/lib/merge-team-rosters";
 import { registrationRows as seedRows } from "@/lib/mock-data";
 import type { RegistrationRowMock } from "@/lib/mock-data";
 import { downloadRegistrationPdf } from "@/lib/registrationPdf";
+import { seedTeamRosters } from "@/lib/seed-team-rosters";
+import { slugify } from "@/lib/slugify";
 
 const statusLabels: Record<RegistrationRowMock["status"], string> = {
   draft: "Borrador",
@@ -61,6 +65,29 @@ function RegistrationDetailInner() {
   const [feeInput, setFeeInput] = useState("");
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [rosterRevision, setRosterRevision] = useState(0);
+
+  useEffect(() => {
+    const bump = () => setRosterRevision((x) => x + 1);
+    window.addEventListener("volleyschedule-rosters-changed", bump);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === LOCAL_ROSTERS_KEY) bump();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("volleyschedule-rosters-changed", bump);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  const mergedRoster = useMemo(() => {
+    if (!id) return null;
+    return (
+      mergeTeamRosters(seedTeamRosters, readStoredRosters()).find(
+        (r) => r.registrationId === id,
+      ) ?? null
+    );
+  }, [id, rosterRevision]);
 
   useEffect(() => {
     const r = loadRow();
@@ -287,6 +314,78 @@ function RegistrationDetailInner() {
             </span>
           ) : null}
         </div>
+      </section>
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+            Roster
+          </h2>
+          <Link
+            href={`/admin/equipos/${encodeURIComponent(slugify(draft.clubName || draft.teamName))}/roster/${encodeURIComponent(draft.id)}`}
+            className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+          >
+            Editar roster en Equipos →
+          </Link>
+        </div>
+        {mergedRoster?.coachName || mergedRoster?.coachPhone ? (
+          <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+            Coach:{" "}
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">
+              {mergedRoster.coachName || "—"}
+            </span>
+            {mergedRoster.coachPhone ? (
+              <>
+                {" "}
+                · <span className="tabular-nums">{mergedRoster.coachPhone}</span>
+              </>
+            ) : null}
+          </p>
+        ) : null}
+        {!mergedRoster ? (
+          <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+            No hay roster asociado a esta inscripción. Podés crearlo desde Equipos.
+          </p>
+        ) : mergedRoster.players.length > 0 ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-200 bg-zinc-50/80 text-left dark:border-zinc-800 dark:bg-zinc-900/60">
+                  <th className="px-3 py-2 font-medium text-zinc-600 dark:text-zinc-400">#</th>
+                  <th className="px-3 py-2 font-medium text-zinc-600 dark:text-zinc-400">
+                    Nombre
+                  </th>
+                  <th className="px-3 py-2 font-medium text-zinc-600 dark:text-zinc-400">
+                    Camiseta
+                  </th>
+                  <th className="px-3 py-2 font-medium text-zinc-600 dark:text-zinc-400">
+                    Posición
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {mergedRoster.players.map((p, idx) => (
+                  <tr key={p.id}>
+                    <td className="px-3 py-2 text-zinc-500">{idx + 1}</td>
+                    <td className="px-3 py-2 text-zinc-900 dark:text-zinc-100">
+                      {p.fullName}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums text-zinc-700 dark:text-zinc-300">
+                      {p.jerseyNumber ?? "—"}
+                    </td>
+                    <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
+                      {p.position ?? "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+            Sin jugadores en el roster. Podés cargarlos desde Equipos.
+          </p>
+        )}
       </section>
     </main>
   );
