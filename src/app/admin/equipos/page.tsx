@@ -6,8 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 import { readStoredRegistrations } from "@/lib/local-registrations";
 import { readStoredRosters, LOCAL_ROSTERS_KEY } from "@/lib/local-team-rosters";
 import { readClubProfiles, LOCAL_CLUB_PROFILES_KEY } from "@/lib/local-club-profiles";
+import { mergeClubProfiles } from "@/lib/merge-club-profiles";
 import { mergeAdminRegistrations } from "@/lib/merge-registrations";
-import { registrationRows as seedRows } from "@/lib/mock-data";
+import { registrationRows as seedRows, seedClubProfiles } from "@/lib/mock-data";
 import { slugify } from "@/lib/slugify";
 import { LOCAL_REGISTRATIONS_KEY } from "@/lib/local-registrations";
 
@@ -23,7 +24,7 @@ type ClubSummary = {
 function buildClubSummaries(): ClubSummary[] {
   const regs = mergeAdminRegistrations(seedRows, readStoredRegistrations());
   const rosters = readStoredRosters();
-  const profiles = readClubProfiles();
+  const profiles = mergeClubProfiles(seedClubProfiles, readClubProfiles());
 
   const map = new Map<string, ClubSummary>();
 

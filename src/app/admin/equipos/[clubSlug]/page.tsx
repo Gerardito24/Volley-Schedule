@@ -7,14 +7,23 @@ import { readStoredRegistrations, LOCAL_REGISTRATIONS_KEY } from "@/lib/local-re
 import { readStoredRosters, upsertStoredRoster, LOCAL_ROSTERS_KEY } from "@/lib/local-team-rosters";
 import type { TeamRoster } from "@/lib/team-roster-types";
 import {
-  getClubProfile,
+  readClubProfiles,
   upsertClubProfile,
   LOCAL_CLUB_PROFILES_KEY,
 } from "@/lib/local-club-profiles";
 import type { ClubProfile } from "@/lib/club-profile-types";
+import { mergeClubProfiles } from "@/lib/merge-club-profiles";
 import { mergeAdminRegistrations } from "@/lib/merge-registrations";
-import { registrationRows as seedRows } from "@/lib/mock-data";
+import { registrationRows as seedRows, seedClubProfiles } from "@/lib/mock-data";
 import { slugify } from "@/lib/slugify";
+
+function readMergedClubProfiles(): ClubProfile[] {
+  return mergeClubProfiles(seedClubProfiles, readClubProfiles());
+}
+
+function getMergedClubProfile(clubSlug: string): ClubProfile | null {
+  return readMergedClubProfiles().find((p) => p.clubSlug === clubSlug) ?? null;
+}
 
 // ─── data helpers ────────────────────────────────────────────────────────────
 
@@ -64,7 +73,7 @@ function loadRostersForSlug(clubSlug: string): {
   }
 
   if (result.length === 0) {
-    const prof = getClubProfile(clubSlug);
+    const prof = getMergedClubProfile(clubSlug);
     if (prof) {
       return {
         rosters: [],
@@ -142,18 +151,18 @@ function ClubDetailInner() {
   const [profileSaved, setProfileSaved] = useState(false);
 
   useEffect(() => {
-    const stored = getClubProfile(clubSlug);
+    const merged = getMergedClubProfile(clubSlug);
     const next = {
-      displayName: stored?.displayName || defaultName,
-      pueblo: stored?.pueblo || "",
-      clubPhone: stored?.clubPhone || "",
-      contactName: stored?.contactName || "",
-      contactEmail: stored?.contactEmail || "",
+      displayName: merged?.displayName || defaultName,
+      pueblo: merged?.pueblo || "",
+      clubPhone: merged?.clubPhone || "",
+      contactName: merged?.contactName || "",
+      contactEmail: merged?.contactEmail || "",
     };
     setProfileDraft(next);
     // Auto-expand if there's already saved data
-    if (stored && profileHasData(next)) setProfileExpanded(true);
-  }, [clubSlug, defaultName]);
+    if (merged && profileHasData(next)) setProfileExpanded(true);
+  }, [clubSlug, defaultName, revision]);
 
   const handleSaveProfile = useCallback(() => {
     upsertClubProfile({
@@ -211,7 +220,7 @@ function ClubDetailInner() {
 
   // ── not found ─────────────────────────────────────────────────────────────
 
-  if (rosters.length === 0 && !getClubProfile(clubSlug)) {
+  if (rosters.length === 0 && !getMergedClubProfile(clubSlug)) {
     return (
       <main className="flex flex-1 flex-col gap-4">
         <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Club no encontrado</h2>
