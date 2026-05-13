@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { CategoryMock, RegistrationRowMock, TournamentMock } from "@/lib/mock-data";
-import { displayCategoryName, registrationRows as seedRegistrationRows } from "@/lib/mock-data";
+import {
+  displayCategoryName,
+  registrationRows as seedRegistrationRows,
+  tournaments as seedTournaments,
+} from "@/lib/mock-data";
+import { registrationMatchesAdminCategory } from "@/lib/registration-category-match";
 import {
   LOCAL_REGISTRATIONS_KEY,
   readStoredRegistrations,
@@ -78,6 +83,10 @@ export function TournamentSchedulePanel({
   onScheduleSaved,
 }: Props) {
   const categories = tournament.categories;
+  const seedTournamentForSlug = useMemo(
+    () => seedTournaments.find((t) => t.slug === tournament.slug),
+    [tournament.slug],
+  );
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
   const [subdivisionFilter, setSubdivisionFilter] = useState<string | "all">(
     "all",
@@ -131,8 +140,12 @@ export function TournamentSchedulePanel({
   useEffect(() => {
     const eligible = mergedRegistrations.filter(
       (r) =>
-        r.tournamentSlug === tournament.slug &&
-        r.categoryId === categoryId &&
+        registrationMatchesAdminCategory(
+          r,
+          tournament,
+          categoryId,
+          seedTournamentForSlug,
+        ) &&
         isEligibleSeedRow(r) &&
         matchesSubdivisionFilter(r, selectedCategory, subdivisionFilter),
     );
@@ -145,10 +158,11 @@ export function TournamentSchedulePanel({
     );
   }, [
     mergedRegistrations,
-    tournament.slug,
+    tournament,
     categoryId,
     subdivisionFilter,
     selectedCategory,
+    seedTournamentForSlug,
     listRevision,
   ]);
 
@@ -165,17 +179,22 @@ export function TournamentSchedulePanel({
   const eligibleCount = useMemo(() => {
     return mergedRegistrations.filter(
       (r) =>
-        r.tournamentSlug === tournament.slug &&
-        r.categoryId === categoryId &&
+        registrationMatchesAdminCategory(
+          r,
+          tournament,
+          categoryId,
+          seedTournamentForSlug,
+        ) &&
         isEligibleSeedRow(r) &&
         matchesSubdivisionFilter(r, selectedCategory, subdivisionFilter),
     ).length;
   }, [
     mergedRegistrations,
-    tournament.slug,
+    tournament,
     categoryId,
     selectedCategory,
     subdivisionFilter,
+    seedTournamentForSlug,
   ]);
 
   const existingCatSchedule = useMemo(() => {
@@ -508,10 +527,7 @@ export function TournamentSchedulePanel({
         Itinerario y brackets
       </h3>
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-        Lista de seeds desde inscripciones <strong>pagadas</strong> o{" "}
-        <strong>aprobadas</strong> (orden por fecha de inscripción). Puedes
-        reordenar antes de generar. Los datos del torneo siguen en este
-        navegador.
+        Inscripciones <strong>pagadas</strong> o <strong>aprobadas</strong>, orden por fecha. Reordená y generá el bracket; todo queda en este navegador.
       </p>
 
       {error ? (

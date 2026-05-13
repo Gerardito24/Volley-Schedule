@@ -7,17 +7,25 @@ import {
   readStoredRegistrations,
 } from "@/lib/local-registrations";
 import { mergeAdminRegistrations } from "@/lib/merge-registrations";
-import { registrationRows as seedRegistrationRows } from "@/lib/mock-data";
+import { registrationMatchesAdminCategory } from "@/lib/registration-category-match";
+import {
+  registrationRows as seedRegistrationRows,
+  tournaments as seedTournaments,
+  type TournamentMock,
+} from "@/lib/mock-data";
 
 export function MergedRegistrationsTable({
   tournamentSlug,
   categoryId,
+  tournament,
   hideTournamentColumn,
   registrationTools = true,
 }: {
   tournamentSlug?: string;
   /** Si se pasa, solo filas de esa categoría (`categoryId` en mock). */
   categoryId?: string;
+  /** Torneo mergeado (admin); con `categoryId` permite alinear ids seed vs localStorage. */
+  tournament?: TournamentMock;
   hideTournamentColumn?: boolean;
   /** Hoja de inscripción, PDF por fila, doble clic en celdas (solo admin). */
   registrationTools?: boolean;
@@ -46,10 +54,20 @@ export function MergedRegistrationsTable({
       merged = merged.filter((r) => r.tournamentSlug === tournamentSlug);
     }
     if (categoryId) {
-      merged = merged.filter((r) => r.categoryId === categoryId);
+      const seedTour =
+        tournamentSlug && tournament
+          ? seedTournaments.find((t) => t.slug === tournamentSlug)
+          : undefined;
+      if (tournament) {
+        merged = merged.filter((r) =>
+          registrationMatchesAdminCategory(r, tournament, categoryId, seedTour),
+        );
+      } else {
+        merged = merged.filter((r) => r.categoryId === categoryId);
+      }
     }
     return merged;
-  }, [tournamentSlug, categoryId, revision]);
+  }, [tournamentSlug, categoryId, tournament, revision]);
 
   return (
     <RegistrationTable
