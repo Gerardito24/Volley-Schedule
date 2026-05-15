@@ -7,6 +7,7 @@ import {
   IT_MASTER_POSITION,
   IT_MASTER_PROFILE_ID,
 } from "@/lib/admin-operator-types";
+import { AdminStorageOriginHint } from "@/components/admin/AdminStorageOriginHint";
 import { createItMaster, hasItMasterProfile, setSession } from "@/lib/admin-operators-store";
 
 function envLocalSnippet(organizerEmail: string): string {
@@ -205,6 +206,7 @@ export default function AdminSetupPage() {
             </button>
           </form>
         )}
+        <AdminStorageOriginHint />
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AdminStorageOriginHint } from "@/components/admin/AdminStorageOriginHint";
 import { setSession, tryLogin } from "@/lib/admin-operators-store";
 import { isRemoteDbEnabled } from "@/lib/remote-data";
 
@@ -86,6 +87,7 @@ export default function AdminLoginPage() {
             {busy ? "Entrando…" : "Entrar"}
           </button>
         </form>
+        <AdminStorageOriginHint />
       </div>
     </div>
   );

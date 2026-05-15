@@ -10,6 +10,26 @@ import {
 
 const BCRYPT_ROUNDS = 10;
 
+const STORAGE_WRITE_ERROR =
+  "No se pudo guardar en este navegador. Libera espacio, desactiva modo privado o usa siempre la misma URL del sitio.";
+
+let sessionMigrated = false;
+
+function migrateSessionFromLegacyStorage(): void {
+  if (typeof window === "undefined" || sessionMigrated) return;
+  sessionMigrated = true;
+  try {
+    const legacy = window.sessionStorage.getItem(SESSION_ADMIN_KEY);
+    if (!legacy) return;
+    if (!window.localStorage.getItem(SESSION_ADMIN_KEY)) {
+      window.localStorage.setItem(SESSION_ADMIN_KEY, legacy);
+    }
+    window.sessionStorage.removeItem(SESSION_ADMIN_KEY);
+  } catch {
+    // ignore migration errors
+  }
+}
+
 function notifyOperatorsChanged(): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("volleyschedule-admin-operators-changed"));
@@ -51,10 +71,15 @@ export function readOperators(): AdminOperator[] {
   }
 }
 
-function persistOperators(list: AdminOperator[]): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(LOCAL_ADMIN_OPERATORS_KEY, JSON.stringify(list));
-  notifyOperatorsChanged();
+function persistOperators(list: AdminOperator[]): StoreResult {
+  if (typeof window === "undefined") return { ok: false, message: "Solo disponible en el navegador." };
+  try {
+    window.localStorage.setItem(LOCAL_ADMIN_OPERATORS_KEY, JSON.stringify(list));
+    notifyOperatorsChanged();
+    return { ok: true };
+  } catch {
+    return { ok: false, message: STORAGE_WRITE_ERROR };
+  }
 }
 
 export function toPublic(op: AdminOperator): AdminOperatorPublic {
@@ -132,7 +157,8 @@ export function createItMaster(
     createdAt: new Date().toISOString(),
     ...(org ? { organizerEmail: org } : {}),
   };
-  persistOperators([op]);
+  const saved = persistOperators([op]);
+  if (!saved.ok) return saved;
   return { ok: true, value: op };
 }
 
@@ -145,8 +171,9 @@ export function tryLogin(username: string, password: string): AdminOperator | nu
 
 export function readSession(): AdminSession | null {
   if (typeof window === "undefined") return null;
+  migrateSessionFromLegacyStorage();
   try {
-    const raw = window.sessionStorage.getItem(SESSION_ADMIN_KEY);
+    const raw = window.localStorage.getItem(SESSION_ADMIN_KEY);
     if (!raw) return null;
     const o = JSON.parse(raw) as unknown;
     if (!o || typeof o !== "object") return null;
@@ -154,7 +181,7 @@ export function readSession(): AdminSession | null {
     if (typeof id !== "string" || !id) return null;
     const op = getOperatorById(id);
     if (!op) {
-      window.sessionStorage.removeItem(SESSION_ADMIN_KEY);
+      window.localStorage.removeItem(SESSION_ADMIN_KEY);
       return null;
     }
     return { profileId: id };
@@ -165,12 +192,15 @@ export function readSession(): AdminSession | null {
 
 export function setSession(profileId: string): void {
   if (typeof window === "undefined") return;
-  window.sessionStorage.setItem(SESSION_ADMIN_KEY, JSON.stringify({ profileId }));
+  migrateSessionFromLegacyStorage();
+  window.localStorage.setItem(SESSION_ADMIN_KEY, JSON.stringify({ profileId }));
+  window.sessionStorage.removeItem(SESSION_ADMIN_KEY);
   notifySessionChanged();
 }
 
 export function clearSession(): void {
   if (typeof window === "undefined") return;
+  window.localStorage.removeItem(SESSION_ADMIN_KEY);
   window.sessionStorage.removeItem(SESSION_ADMIN_KEY);
   notifySessionChanged();
 }
@@ -213,7 +243,8 @@ export function addAdministrator(
     role: "administrator",
     createdAt: new Date().toISOString(),
   };
-  persistOperators([...readOperators(), op]);
+  const saved = persistOperators([...readOperators(), op]);
+  if (!saved.ok) return saved;
   return { ok: true, value: op };
 }
 
@@ -226,13 +257,15 @@ export function deleteOperator(actor: AdminOperator, targetId: string): StoreRes
     if (actor.role !== "it_master" || actor.id !== target.id) {
       return { ok: false, message: "Solo el perfil IT maestro puede eliminarse a sí mismo." };
     }
-    persistOperators(list.filter((o) => o.id !== targetId));
+    const saved = persistOperators(list.filter((o) => o.id !== targetId));
+    if (!saved.ok) return saved;
     clearSession();
     return { ok: true };
   }
 
   if (actor.role === "administrator" || actor.role === "it_master") {
-    persistOperators(list.filter((o) => o.id !== targetId));
+    const saved = persistOperators(list.filter((o) => o.id !== targetId));
+    if (!saved.ok) return saved;
     if (readSession()?.profileId === targetId) clearSession();
     return { ok: true };
   }
@@ -288,7 +321,8 @@ export function updateOperator(
     }
     const nextList = [...list];
     nextList[idx] = next;
-    persistOperators(nextList);
+    const saved = persistOperators(nextList);
+    if (!saved.ok) return saved;
     return { ok: true };
   }
 
@@ -311,6 +345,7 @@ export function updateOperator(
   };
   const nextList = [...list];
   nextList[idx] = next;
-  persistOperators(nextList);
+  const saved = persistOperators(nextList);
+  if (!saved.ok) return saved;
   return { ok: true };
 }

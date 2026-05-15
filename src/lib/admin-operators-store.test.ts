@@ -31,6 +31,7 @@ function installBrowserMocks() {
 }
 
 beforeEach(() => {
+  vi.resetModules();
   Object.keys(local).forEach((k) => delete local[k]);
   Object.keys(sess).forEach((k) => delete sess[k]);
   installBrowserMocks();
@@ -110,6 +111,75 @@ describe("admin-operators-store", () => {
     const del = deleteOperator(it, it.id);
     expect(del.ok).toBe(true);
     expect(hasItMasterProfile()).toBe(false);
+  });
+
+  it("session persists in localStorage after sessionStorage is cleared", async () => {
+    const { SESSION_ADMIN_KEY } = await import("@/lib/admin-operator-types");
+    const { createItMaster, readSession, setSession, tryLogin } = await import(
+      "@/lib/admin-operators-store"
+    );
+
+    createItMaster("u1", "pass1234");
+    const op = tryLogin("u1", "pass1234");
+    expect(op).not.toBeNull();
+    setSession(op!.id);
+
+    Object.keys(sess).forEach((k) => delete sess[k]);
+    expect(sess[SESSION_ADMIN_KEY]).toBeUndefined();
+
+    const session = readSession();
+    expect(session).not.toBeNull();
+    expect(session!.profileId).toBe(op!.id);
+    expect(local[SESSION_ADMIN_KEY]).toBeDefined();
+  });
+
+  it("migrates legacy sessionStorage session to localStorage", async () => {
+    const { SESSION_ADMIN_KEY } = await import("@/lib/admin-operator-types");
+    const { createItMaster, readSession } = await import("@/lib/admin-operators-store");
+
+    createItMaster("u1", "pass1234");
+    const legacy = JSON.stringify({ profileId: "it-master" });
+    sess[SESSION_ADMIN_KEY] = legacy;
+
+    const session = readSession();
+    expect(session).not.toBeNull();
+    expect(session!.profileId).toBe("it-master");
+    expect(local[SESSION_ADMIN_KEY]).toBe(legacy);
+    expect(sess[SESSION_ADMIN_KEY]).toBeUndefined();
+  });
+
+  it("createItMaster reports storage write failures", async () => {
+    vi.stubGlobal(
+      "window",
+      {
+        localStorage: {
+          getItem: (k: string) => local[k] ?? null,
+          setItem: () => {
+            throw new DOMException("QuotaExceededError");
+          },
+          removeItem: (k: string) => {
+            delete local[k];
+          },
+        },
+        sessionStorage: {
+          getItem: (k: string) => sess[k] ?? null,
+          setItem: (k: string, v: string) => {
+            sess[k] = v;
+          },
+          removeItem: (k: string) => {
+            delete sess[k];
+          },
+        },
+        dispatchEvent: vi.fn(),
+      } as unknown as Window & typeof globalThis,
+    );
+
+    const { createItMaster } = await import("@/lib/admin-operators-store");
+    const r = createItMaster("u1", "pass1234");
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.message).toContain("No se pudo guardar");
+    }
   });
 
   it("administrator can delete another administrator", async () => {
