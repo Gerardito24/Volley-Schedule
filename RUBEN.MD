@@ -12,7 +12,7 @@ Documento de mano para retomar sin perder contexto. **No sustituye** el README d
 
 | Commit     | Descripción breve |
 | ---------- | ----------------- |
-| * | **Split Vercel público/admin:** `NEXT_PUBLIC_APP_SURFACE` en middleware (`public` → 404 en `/admin` y `/api/admin`), helper `src/lib/app-surface.ts`, endpoint `/api/public/db-status`, enlaces públicos al admin solo con `NEXT_PUBLIC_ADMIN_APP_URL`, docs `DEPLOY_SPLIT.md` / `.env.example`. *(SHA: `git log -1 --oneline`.)* |
+| `80ffbc5`  | **Split Vercel público/admin:** `NEXT_PUBLIC_APP_SURFACE` en middleware (`public` → 404 en `/admin` y `/api/admin`), helper `src/lib/app-surface.ts`, endpoint `/api/public/db-status`, enlaces públicos al admin solo con `NEXT_PUBLIC_ADMIN_APP_URL`, docs `DEPLOY_SPLIT.md` / `.env.example`. |
 | `f08660d`  | fix(admin): persistir sesión admin en localStorage |
 | `c179bcb`  | Admin itinerario: bracket workspace, details, edición por diálogo y doble toque |
 | `bdbd8b1`  | Admin: página dedicada de itinerario con bracket y canchas |
