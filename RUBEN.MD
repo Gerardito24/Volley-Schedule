@@ -6,37 +6,47 @@ Documento de mano para retomar sin perder contexto. **No sustituye** el README d
 
 - **Ruta local (esta copia):** `C:\Users\Admin\OneDrive\Desktop\IdeasI\volleyschedule-registrations`
 - **GitHub:** `https://github.com/Gerardito24/Volley-Schedule`
-- **Rama:** `main` (push a `origin/main` tras este cierre)
+- **Rama:** `main` (push a `origin/main`)
 
 ## HEAD reciente (`git log`)
 
 | Commit     | Descripción breve |
 | ---------- | ----------------- |
-| * | Admin itinerario (workspace): configuración en `<details>` (abierta si no hay partidos), solo bracket con scroll, ocupación por cancha en segundo `<details>`, edición hora/cancha con doble clic / doble toque + botón Editar + `MatchScheduleEditDialog`, `patchAssignment` con categoría objetivo desde overview global; hook `use-double-tap`. Incluye API Drizzle/Railway y migración admin acumulados en el mismo commit. *(SHA: `git log -1 --oneline`.)* |
+| * | **Split Vercel público/admin:** `NEXT_PUBLIC_APP_SURFACE` en middleware (`public` → 404 en `/admin` y `/api/admin`), helper `src/lib/app-surface.ts`, endpoint `/api/public/db-status`, enlaces públicos al admin solo con `NEXT_PUBLIC_ADMIN_APP_URL`, docs `DEPLOY_SPLIT.md` / `.env.example`. *(SHA: `git log -1 --oneline`.)* |
+| `f08660d`  | fix(admin): persistir sesión admin en localStorage |
+| `c179bcb`  | Admin itinerario: bracket workspace, details, edición por diálogo y doble toque |
 | `bdbd8b1`  | Admin: página dedicada de itinerario con bracket y canchas |
 | `19cac6e`  | iOS/macOS: safe areas, `min-h-dvh`, header público responsive, CTAs ~44px, admin drawer `<lg` + overlay |
-| `9cb9802`  | Admin: perfiles operador, login, setup, `AdminShell`, store + Vitest |
-| `7c4ea2f`  | Logo custom en header (`/volleyschedule-logo.png`) |
+
+## Split Vercel — público + admin (referencia)
+
+Implementación alineada al plan *Split Vercel Public/Admin*:
+
+1. **`src/lib/app-surface.ts`** — `getAppSurface()` (`public` \| `admin` \| `all` en dev), `getPublicAdminHref()`, `buildAdminHref()`.
+2. **`src/middleware.ts`** — Con `NEXT_PUBLIC_APP_SURFACE=public`, responde **404** a `/admin/*` y `/api/admin/*`. En `admin`/dev local, mantiene redirect a login cuando hay DB.
+3. **`src/app/api/public/db-status/route.ts`** — El sitio público ya no llama a `/api/admin/db` para saber si hay Postgres.
+4. **UI pública** — `SiteHeader`, footer en `(public)/layout.tsx` y enlace en `/equipo`: en surface `public` solo muestran enlace al admin si existe `NEXT_PUBLIC_ADMIN_APP_URL`.
+5. **Docs** — `docs/DEPLOY_SPLIT.md` (guía de dos proyectos Vercel), `.env.example`, `docs/DEPLOYMENT.md`.
+
+### Variables por proyecto Vercel
+
+| Proyecto | Obligatorias | No poner |
+|----------|--------------|----------|
+| **Público** | `NEXT_PUBLIC_APP_SURFACE=public`, `DATABASE_URL_POOLED`, `NEXT_PUBLIC_ADMIN_APP_URL=https://admin.tudominio.com` | `ADMIN_SESSION_SECRET` |
+| **Admin** | `NEXT_PUBLIC_APP_SURFACE=admin`, `DATABASE_URL_POOLED`, `ADMIN_SESSION_SECRET` | — |
+
+Misma Postgres (Railway) en ambos. Migraciones: `npm run db:migrate` (una vez; no automático en Vercel).
 
 ## Itinerario admin — workspace “solo bracket” (referencia)
 
-Implementación alineada al plan *Itinerario admin — solo bracket, scroll y doble toque*:
+Implementación en `c179bcb` / commits previos:
 
-1. **`TournamentSchedulePanel.tsx`** — Modo `workspace`: sin grid aside ni pestañas; configuración colapsable (`configOpen` + `useEffect` según `flatRows.length`); bloque resultado con `ScheduleBracketView` compacto en contenedor `max-h-[min(70vh,720px)] overflow-auto`; segundo `<details>` “Ocupación por cancha” con `ScheduleCourtsOverview` y `onMatchRequestEdit`; diálogo `MatchScheduleEditDialog`; tabla editable solo si `!workspace`. Eliminado `WorkspaceCard` al quitar el aside.
-2. **`ScheduleBracketView.tsx`** — `compact`, `onRequestEditMatch`, doble clic + `useDoubleTap` + botón Editar en tarjeta.
-3. **`ScheduleCourtsOverview.tsx`** — `onMatchRequestEdit(matchId, categoryId)`; doble clic / doble toque + Editar; tipo `courtId` nullable alineado a `resolveCourtIdFromAssignment`.
-4. **`MatchScheduleEditDialog.tsx`** — Modal datetime-local + cancha; `onSave` → misma validación que la tabla vía `patchAssignment`.
-5. **`src/hooks/use-double-tap.ts`** — Dos `touchend` en ventana corta; umbral de movimiento para no disparar al hacer scroll.
+1. **`TournamentSchedulePanel.tsx`** — Modo `workspace`: configuración colapsable; bracket con scroll; ocupación por cancha en `<details>`; `MatchScheduleEditDialog`; doble clic / doble toque.
+2. **`ScheduleBracketView.tsx`**, **`ScheduleCourtsOverview.tsx`**, **`MatchScheduleEditDialog.tsx`**, **`use-double-tap.ts`**.
 
 ## Plan móvil iOS / macOS (referencia)
 
-El plan en Cursor (`ios_mobile_ux_polish_67953e17`) quedó **implementado** en `19cac6e`. Resumen técnico:
-
-1. **`src/app/layout.tsx`** — `export const viewport` (`viewportFit: 'cover'`), `themeColor`, `icons.apple` al logo.
-2. **`src/app/globals.css`** — utilidades `pt-safe` / `pb-safe` / `pl-safe` / `pr-safe`; `body` con fuente del tema.
-3. **Público** — `(public)/layout.tsx` (`min-h-dvh`, footer con `pb` + safe-area); `SiteHeader.tsx` (notch, pills compactas en XS, botón admin 44×44).
-4. **CTAs** — `TournamentCard`, home `(public)/page.tsx`, itinerarios, detalle torneo, `TournamentRegisterForm` (pie + checkboxes + panel reutilizar).
-5. **Admin** — `AdminShell` (`menuOpen`, overlay, cierre al cambiar ruta); `AdminSidebar` (`menuOpen`, fixed + translate en móvil, `lg:relative`); `AdminTopBar` (hamburguesa `<lg`).
+Implementado en `19cac6e`: safe areas, header responsive, CTAs 44px, admin drawer móvil.
 
 ## Arranque local
 
@@ -46,19 +56,32 @@ npm install   # si falta node_modules
 npm run dev   # Next.js en el puerto por defecto (3000)
 ```
 
-Backend: este proyecto es **Next.js full-stack de demo** con datos mock/localStorage según módulos; no hay servidor Express separado en este repo.
+Sin `NEXT_PUBLIC_APP_SURFACE`, en local sirve **público + admin** en el mismo host.
+
+Simular split:
+
+```powershell
+# Público (puerto 3000)
+$env:NEXT_PUBLIC_APP_SURFACE="public"; $env:NEXT_PUBLIC_ADMIN_APP_URL="http://localhost:3001"; npm run dev
+
+# Admin (puerto 3001, otra terminal)
+$env:NEXT_PUBLIC_APP_SURFACE="admin"; npm run dev -- -p 3001
+```
 
 ## Verificación rápida antes de presentar
 
-- `npm run build` debe pasar tras cambios de admin/itinerario.
-- En **iPhone**: refrescar el bookmark tras deploy de **Vercel**; probar `/`, `/tournaments`, `/itinerarios`, inscripción, `/admin` con menú hamburguesa; en **itinerario admin** probar doble toque en tarjetas del bracket y en lista por cancha.
-- Variable opcional: `NEXT_PUBLIC_ADMIN_APP_URL` si el admin vive en otro dominio.
+- `npm run build` y `npm test` deben pasar.
+- **Proyecto público (Vercel):** `/` OK; `/admin` → **404**; enlaces al panel apuntan a `NEXT_PUBLIC_ADMIN_APP_URL`.
+- **Proyecto admin (Vercel):** `/admin/login` OK con `ADMIN_SESSION_SECRET`.
+- En **iPhone**: probar `/`, `/tournaments`, `/itinerarios`, inscripción; itinerario admin con doble toque.
 
 ## Próximos pasos (si retomas)
 
-- Probar en dispositivo real post-deploy.
-- Opcional: PWA completa (manifest + service worker) si quieres “instalar” más allá del bookmark.
-- Export / persistencia real de inscripciones si deja de ser solo mock.
+1. Crear **dos proyectos Vercel** conectados al mismo repo (ver `docs/DEPLOY_SPLIT.md`).
+2. Asignar dominios: principal + `admin.<dominio>`.
+3. Configurar env vars en cada proyecto (tabla arriba).
+4. Probar en dispositivo real post-deploy.
+5. Opcional: PWA, rate limit en `/api/club-registration/send-pdf`.
 
 ## Cómo seguir en otra PC
 

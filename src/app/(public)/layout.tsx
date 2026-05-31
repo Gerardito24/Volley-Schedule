@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
+import { getPublicAdminHref } from "@/lib/app-surface";
 
 export default function PublicLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const adminHref = getPublicAdminHref();
+
   return (
     <div className="flex min-h-dvh w-full flex-col">
       <SiteHeader />
@@ -11,13 +14,18 @@ export default function PublicLayout({
         {children}
       </div>
       <footer className="mt-auto border-t border-zinc-100 px-4 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom,0px))] pl-safe pr-safe text-center text-xs text-zinc-400 sm:px-6 lg:px-8 xl:px-12 dark:border-zinc-800 dark:text-zinc-600">
-        VolleySchedule ·{" "}
-        <Link
-          href="/admin"
-          className="hover:text-zinc-600 underline underline-offset-2 dark:hover:text-zinc-400"
-        >
-          Organizadores
-        </Link>
+        VolleySchedule
+        {adminHref ? (
+          <>
+            {" · "}
+            <Link
+              href={adminHref}
+              className="hover:text-zinc-600 underline underline-offset-2 dark:hover:text-zinc-400"
+            >
+              Organizadores
+            </Link>
+          </>
+        ) : null}
       </footer>
     </div>
   );

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { getPublicAdminHref } from "@/lib/app-surface";
 
 const NAV_LINKS = [
   { href: "/tournaments", label: "Torneos" },
@@ -10,11 +11,7 @@ const NAV_LINKS = [
   { href: "/equipo", label: "Equipo" },
 ];
 
-const ADMIN_HREF =
-  typeof process.env.NEXT_PUBLIC_ADMIN_APP_URL === "string" &&
-  process.env.NEXT_PUBLIC_ADMIN_APP_URL.trim().length > 0
-    ? process.env.NEXT_PUBLIC_ADMIN_APP_URL.trim()
-    : "/admin";
+const ADMIN_HREF = getPublicAdminHref();
 
 function ProfileAdminIcon({ className }: { className?: string }) {
   return (
@@ -81,14 +78,16 @@ export function SiteHeader() {
         </nav>
 
         {/* Admin: absolute + último en el DOM para que quede por encima del logo centrado (evita solapamiento invisible) */}
-        <Link
-          href={ADMIN_HREF}
-          className="absolute right-[max(0.75rem,env(safe-area-inset-right,0px))] top-3 z-20 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-emerald-600 dark:hover:bg-emerald-950/50 dark:hover:text-emerald-400 sm:right-[max(1.25rem,env(safe-area-inset-right,0px))] sm:top-4 lg:right-[max(1.75rem,env(safe-area-inset-right,0px))]"
-          aria-label="Ir a administración"
-          title="Administración"
-        >
-          <ProfileAdminIcon className="h-5 w-5" />
-        </Link>
+        {ADMIN_HREF ? (
+          <Link
+            href={ADMIN_HREF}
+            className="absolute right-[max(0.75rem,env(safe-area-inset-right,0px))] top-3 z-20 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-emerald-600 dark:hover:bg-emerald-950/50 dark:hover:text-emerald-400 sm:right-[max(1.25rem,env(safe-area-inset-right,0px))] sm:top-4 lg:right-[max(1.75rem,env(safe-area-inset-right,0px))]"
+            aria-label="Ir a administración"
+            title="Administración"
+          >
+            <ProfileAdminIcon className="h-5 w-5" />
+          </Link>
+        ) : null}
       </div>
     </header>
   );

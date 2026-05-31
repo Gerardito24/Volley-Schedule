@@ -1,6 +1,8 @@
 # Deploy: Vercel y/o Railway (Volley-Schedule)
 
-Esta app es **un solo proyecto Next.js** en la raíz del repo. Los datos actuales viven en **localStorage** del navegador (no hace falta base de datos en el servidor para el MVP).
+Esta app es **un solo proyecto Next.js** en la raíz del repo. Puede desplegarse como un solo sitio o como **dos proyectos Vercel** (público + admin); ver [DEPLOY_SPLIT.md](DEPLOY_SPLIT.md).
+
+Con PostgreSQL configurado, torneos e inscripciones se comparten entre navegadores. Sin DB, el fallback usa **localStorage** por origen (no se comparte entre dominios distintos).
 
 Elige **una URL canónica** para usuarios finales (recomendado: Vercel). Desplegar en Vercel y Railway a la vez da dos orígenes distintos: el `localStorage` no se comparte entre dominios.
 
@@ -22,13 +24,17 @@ Elige **una URL canónica** para usuarios finales (recomendado: Vercel). Despleg
 5. **Install Command**: `npm install` o `npm ci` (por defecto).
 6. **Node**: 20.x (alineado con `engines` en `package.json`).
 
-### Variables de entorno (opcionales)
+### Variables de entorno
 
 | Variable | Cuándo usarla |
 |----------|----------------|
-| `NEXT_PUBLIC_ADMIN_APP_URL` | Solo si el panel admin debe abrirse en **otro dominio**. Si se omite, el icono de perfil en el header usa `/admin` en el mismo sitio. |
+| `NEXT_PUBLIC_APP_SURFACE` | `public` o `admin` en cada proyecto Vercel del split. Ver [DEPLOY_SPLIT.md](DEPLOY_SPLIT.md). |
+| `DATABASE_URL` / `DATABASE_URL_POOLED` | PostgreSQL compartido (Railway u otro). |
+| `ADMIN_SESSION_SECRET` | Solo en el proyecto **admin**. |
+| `NEXT_PUBLIC_ADMIN_APP_URL` | En el proyecto **público**: URL del admin en otro dominio. |
+| `RESEND_*` | Envío de PDF en `/equipo`. |
 
-No es necesario configurar Supabase/Stripe para el flujo actual mock + localStorage.
+Para el split público/admin completo, sigue [DEPLOY_SPLIT.md](DEPLOY_SPLIT.md).
 
 ### Dominio y CI
 
@@ -39,7 +45,8 @@ No es necesario configurar Supabase/Stripe para el flujo actual mock + localStor
 
 - [ ] `/` carga sin error.
 - [ ] `/tournaments`, `/equipo`, `/tournaments/[slug]` funcionan.
-- [ ] `/admin` y subrutas cargan en el mismo origen (o en la URL de `NEXT_PUBLIC_ADMIN_APP_URL` si la definiste).
+- [ ] Proyecto **público**: `/admin` responde 404; enlaces al panel apuntan a `NEXT_PUBLIC_ADMIN_APP_URL` si está definida.
+- [ ] Proyecto **admin**: `/admin/login` y subrutas cargan con `ADMIN_SESSION_SECRET` configurado.
 
 ---
 

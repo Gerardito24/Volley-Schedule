@@ -4,7 +4,7 @@ export async function isRemoteDbEnabled(): Promise<boolean> {
   if (typeof window === "undefined") return false;
   if (dbEnabledCache != null) return dbEnabledCache;
   try {
-    const res = await fetch("/api/admin/db", { cache: "no-store" });
+    const res = await fetch("/api/public/db-status", { cache: "no-store" });
     if (!res.ok) return false;
     const data = (await res.json()) as { configured?: boolean };
     dbEnabledCache = Boolean(data.configured);

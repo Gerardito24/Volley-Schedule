@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { ClubRegisterForm } from "@/components/ClubRegisterForm";
+import { buildAdminHref } from "@/lib/app-surface";
+
+const ADMIN_EQUIPOS_HREF = buildAdminHref("/admin/equipos");
 
 export default function EquipoPage() {
   return (
@@ -15,12 +18,18 @@ export default function EquipoPage() {
           para la constancia. Al pulsar &quot;Guardar registro&quot; se guardan el perfil del club y la inscripción
           interna, y se intenta enviar el PDF a ese correo (requiere configurar Resend en el servidor). El equipo
           aparece en{" "}
-          <Link
-            href="/admin/equipos"
-            className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
-          >
-            Administración → Equipos
-          </Link>{" "}
+          {ADMIN_EQUIPOS_HREF ? (
+            <Link
+              href={ADMIN_EQUIPOS_HREF}
+              className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            >
+              Administración → Equipos
+            </Link>
+          ) : (
+            <span className="font-medium text-emerald-700 dark:text-emerald-400">
+              Administración → Equipos
+            </span>
+          )}{" "}
           (mismo navegador / dispositivo que uses para el admin).
         </p>
       </div>

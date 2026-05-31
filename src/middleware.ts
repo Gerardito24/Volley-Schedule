@@ -1,16 +1,32 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { getAppSurface } from "@/lib/app-surface";
 import { ADMIN_SESSION_COOKIE } from "@/lib/admin-session-constants";
 
 function databaseEnvPresent(): boolean {
   return Boolean(process.env.DATABASE_URL_POOLED || process.env.DATABASE_URL);
 }
 
-export function middleware(req: NextRequest) {
-  if (!databaseEnvPresent()) return NextResponse.next();
+function notFound(): NextResponse {
+  return new NextResponse(null, { status: 404 });
+}
 
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  if (!pathname.startsWith("/admin")) return NextResponse.next();
+  const surface = getAppSurface();
+
+  if (surface === "public") {
+    if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
+      return notFound();
+    }
+    return NextResponse.next();
+  }
+
+  if (!pathname.startsWith("/admin")) {
+    return NextResponse.next();
+  }
+
+  if (!databaseEnvPresent()) return NextResponse.next();
 
   if (
     pathname === "/admin/login" ||
@@ -32,5 +48,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/api/admin/:path*"],
 };
