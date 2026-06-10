@@ -24,6 +24,7 @@ async function main() {
     ["public home", `${publicBase}/`, 200],
     ["public blocks /admin", `${publicBase}/admin`, 404],
     ["public blocks /api/admin", `${publicBase}/api/admin/db`, 404],
+    ["admin root redirect", `${adminBase}/`, [307, 308]],
     ["admin login", `${adminBase}/admin/login`, 200],
     ["admin profiles (redirect/login)", `${adminBase}/admin/profiles`, [307, 308, 200]],
   ];

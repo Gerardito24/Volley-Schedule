@@ -38,6 +38,7 @@ export default function AdminSetupPage() {
   const [copyDone, setCopyDone] = useState(false);
   const [useRemote, setUseRemote] = useState(false);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [remoteCheckError, setRemoteCheckError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,9 +48,17 @@ export default function AdminSetupPage() {
       setUseRemote(remote);
       if (!remote) return;
       const res = await fetch("/api/admin/setup", { cache: "no-store" });
+      if (cancelled) return;
+      if (!res.ok) {
+        setRemoteCheckError(
+          "No se pudo conectar a la base de datos. Revisa DATABASE_URL en Vercel (proyecto admin) y ejecuta npm run db:migrate contra Railway.",
+        );
+        setRemoteReady(true);
+        return;
+      }
       const data = (await res.json().catch(() => ({}))) as { needsSetup?: boolean };
       if (cancelled) return;
-      if (!data.needsSetup) {
+      if (data.needsSetup === false) {
         router.replace("/admin/login");
         return;
       }
@@ -139,6 +148,12 @@ export default function AdminSetupPage() {
             {IT_MASTER_POSITION}
           </p>
         </div>
+
+        {remoteCheckError ? (
+          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            {remoteCheckError}
+          </div>
+        ) : null}
 
         {useRemote && !remoteReady ? (
           <p className="mt-6 text-sm text-zinc-500">Comprobando configuración…</p>

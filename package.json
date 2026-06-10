@@ -14,7 +14,9 @@
     "db:migrate": "node scripts/migrate.cjs",
     "db:studio": "drizzle-kit studio",
     "check:deploy-env": "node scripts/check-deploy-env.mjs",
-    "verify:split-local": "node scripts/verify-split-local.mjs"
+    "verify:split-local": "node scripts/verify-split-local.mjs",
+    "verify:deploy-urls": "node scripts/verify-deploy-urls.mjs",
+    "print:vercel-checklist": "node scripts/print-vercel-checklist.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
