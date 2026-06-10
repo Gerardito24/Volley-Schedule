@@ -6,7 +6,7 @@ import type { ClubProfile } from "@/lib/club-profile-types";
 import type { ImportBatch } from "@/lib/local-import-batches";
 import type { RegistrationRowMock, TournamentMock } from "@/lib/mock-data";
 import type { TeamRoster } from "@/lib/team-roster-types";
-import { upsertDbAdminUser, listDbAdminUsers } from "@/server/admin-users-repo";
+import { hasDbItMaster, upsertDbAdminUser, listDbAdminUsers } from "@/server/admin-users-repo";
 import { upsertDbClubProfile } from "@/server/club-profiles-repo";
 import { upsertDbImportBatch } from "@/server/import-batches-repo";
 import { upsertDbRegistration } from "@/server/registrations-repo";
@@ -66,7 +66,12 @@ export async function POST(req: Request) {
     await upsertDbImportBatch(b);
     counts.importBatches++;
   }
+  let itMasterImported = await hasDbItMaster();
   for (const op of payload.adminOperators ?? []) {
+    if (op.role === "it_master") {
+      if (itMasterImported) continue;
+      itMasterImported = true;
+    }
     await upsertDbAdminUser(op);
     counts.adminOperators++;
   }

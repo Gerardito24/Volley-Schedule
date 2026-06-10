@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   IT_MASTER_DISPLAY_NAME,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/admin-operator-types";
 import { AdminStorageOriginHint } from "@/components/admin/AdminStorageOriginHint";
 import { createItMaster, hasItMasterProfile, setSession } from "@/lib/admin-operators-store";
+import { isRemoteDbEnabled } from "@/lib/remote-data";
 
 function envLocalSnippet(organizerEmail: string): string {
   const bccLine = organizerEmail.trim()
@@ -35,27 +36,69 @@ export default function AdminSetupPage() {
   const [busy, setBusy] = useState(false);
   const [postCreateSnippet, setPostCreateSnippet] = useState<string | null>(null);
   const [copyDone, setCopyDone] = useState(false);
+  const [useRemote, setUseRemote] = useState(false);
+  const [remoteReady, setRemoteReady] = useState(false);
 
-  function submit(e: React.FormEvent) {
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const remote = await isRemoteDbEnabled();
+      if (cancelled) return;
+      setUseRemote(remote);
+      if (!remote) return;
+      const res = await fetch("/api/admin/setup", { cache: "no-store" });
+      const data = (await res.json().catch(() => ({}))) as { needsSetup?: boolean };
+      if (cancelled) return;
+      if (!data.needsSetup) {
+        router.replace("/admin/login");
+        return;
+      }
+      setRemoteReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setCopyDone(false);
-    if (hasItMasterProfile()) {
-      router.replace("/admin/login");
-      return;
-    }
     if (password !== confirm) {
       setError("Las contraseñas no coinciden.");
       return;
     }
     setBusy(true);
-    const res = createItMaster(username, password, organizerEmail);
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.message);
-      return;
+    try {
+      if (useRemote) {
+        const res = await fetch("/api/admin/setup", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ username, password, organizerEmail }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
+        if (!res.ok) {
+          setError(typeof data.message === "string" ? data.message : "No se pudo crear el perfil.");
+          return;
+        }
+        router.replace("/admin");
+        return;
+      }
+
+      if (hasItMasterProfile()) {
+        router.replace("/admin/login");
+        return;
+      }
+      const res = createItMaster(username, password, organizerEmail);
+      if (!res.ok) {
+        setError(res.message);
+        return;
+      }
+      setPostCreateSnippet(envLocalSnippet(organizerEmail));
+    } finally {
+      setBusy(false);
     }
-    setPostCreateSnippet(envLocalSnippet(organizerEmail));
   }
 
   function enterAdmin() {
@@ -79,6 +122,11 @@ export default function AdminSetupPage() {
         <h1 className="text-xl font-bold text-zinc-900">Configuración inicial</h1>
         <p className="mt-2 text-sm text-zinc-600">
           Crea el perfil IT maestro. Sin este perfil el panel de administración no está disponible.
+          {useRemote ? (
+            <span className="mt-1 block text-xs text-emerald-700">
+              Modo servidor: el perfil se guardará en la base de datos compartida.
+            </span>
+          ) : null}
         </p>
 
         <div className="mt-6 space-y-3 rounded-lg bg-zinc-50 p-4 text-sm">
@@ -92,7 +140,9 @@ export default function AdminSetupPage() {
           </p>
         </div>
 
-        {postCreateSnippet ? (
+        {useRemote && !remoteReady ? (
+          <p className="mt-6 text-sm text-zinc-500">Comprobando configuración…</p>
+        ) : postCreateSnippet ? (
           <div className="mt-6 space-y-4">
             <p className="text-sm font-semibold text-zinc-900">Correo y constancias (Resend)</p>
             <p className="text-sm text-zinc-600">

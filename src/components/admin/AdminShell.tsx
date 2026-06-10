@@ -30,12 +30,25 @@ export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>
 
     async function run() {
       const dbRes = await fetch("/api/admin/db", { cache: "no-store" });
-      const dbJson = (await dbRes.json().catch(() => ({}))) as { configured?: boolean };
+      const dbJson = (await dbRes.json().catch(() => ({}))) as {
+        configured?: boolean;
+        needsSetup?: boolean;
+      };
       const dbConfigured = Boolean(dbJson.configured);
+      const needsSetup = Boolean(dbJson.needsSetup);
 
       if (cancelled) return;
 
       if (dbConfigured) {
+        if (needsSetup) {
+          if (path !== "/admin/setup" && path !== "/admin/db-migration") {
+            router.replace("/admin/setup");
+            return;
+          }
+          setReady(true);
+          return;
+        }
+
         if (path === "/admin/setup") {
           router.replace("/admin/login");
           return;

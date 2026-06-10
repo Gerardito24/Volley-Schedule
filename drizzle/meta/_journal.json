@@ -8,6 +8,13 @@
       "when": 1735689600000,
       "tag": "0001_jsonb_first",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1749571200000,
+      "tag": "0002_admin_one_it_master",
+      "breakpoints": true
     }
   ]
 }

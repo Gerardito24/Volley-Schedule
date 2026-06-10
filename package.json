@@ -12,7 +12,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "db:migrate": "node scripts/migrate.cjs",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "check:deploy-env": "node scripts/check-deploy-env.mjs",
+    "verify:split-local": "node scripts/verify-split-local.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

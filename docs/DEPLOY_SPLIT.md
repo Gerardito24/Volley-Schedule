@@ -61,12 +61,30 @@ La variable `NEXT_PUBLIC_APP_SURFACE` activa el middleware en [`src/middleware.t
 | `ADMIN_SESSION_SECRET` | **Sí** | Secreto largo y aleatorio (solo en este proyecto) |
 | `RESEND_*`, `ORGANIZER_BCC` | Opcional | Si el admin envía correos |
 
+### Primera configuración del IT maestro (Postgres vacía)
+
+1. Abre `https://admin.tudominio.com/admin/setup` — crea el perfil IT maestro en la base de datos.
+2. Alternativa: importar desde localStorage en `/admin/db-migration` si ya tenías operadores en el navegador.
+
+API: `GET/POST /api/admin/setup` (solo cuando no hay operadores en la DB).
+
 ### Rutas admin
 
 - `/admin`, `/admin/login`, `/admin/setup`
 - `/admin/tournaments`, `/admin/registrations`, `/admin/profiles`, `/admin/equipos`
 - `/admin/tournaments/[slug]/schedule`
 - `/admin/db-migration` (temporal; quitar cuando termine la migración)
+
+---
+
+## Comprobar variables localmente
+
+Copia las variables de cada proyecto Vercel a `.env.local` y ejecuta:
+
+```bash
+npm run check:deploy-env public
+npm run check:deploy-env admin
+```
 
 ---
 
