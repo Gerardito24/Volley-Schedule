@@ -32,8 +32,11 @@ export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>
     async function runRemoteDbFlow() {
       const dbRes = await fetch("/api/admin/db", { cache: "no-store" });
       if (!dbRes.ok) {
+        const errJson = (await dbRes.json().catch(() => ({}))) as { message?: string };
         setLoadError(
-          "No se pudo conectar a la base de datos. Revisa DATABASE_URL en Vercel (proyecto admin) y ejecuta npm run db:migrate contra Railway.",
+          typeof errJson.message === "string"
+            ? errJson.message
+            : "No se pudo conectar a la base de datos. Revisa DATABASE_URL en Vercel (proyecto admin) y ejecuta npm run db:migrate contra Railway.",
         );
         setReady(true);
         return;
