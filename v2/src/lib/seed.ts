@@ -232,17 +232,32 @@ export function buildSeedData(): SeedData {
     courts: ["Cancha 1", "Cancha 2"],
   };
   const assigned = autoAssignSchedule(matches, settings);
-  const quarterScores: [number, number][] = [
-    [2, 0],
-    [2, 1],
-    [0, 2],
-    [2, 1],
+  const quarterSetScores: { home: number; away: number }[][] = [
+    [
+      { home: 25, away: 18 },
+      { home: 25, away: 21 },
+    ],
+    [
+      { home: 25, away: 22 },
+      { home: 19, away: 25 },
+      { home: 15, away: 11 },
+    ],
+    [
+      { home: 20, away: 25 },
+      { home: 23, away: 25 },
+    ],
+    [
+      { home: 25, away: 23 },
+      { home: 21, away: 25 },
+      { home: 15, away: 13 },
+    ],
   ];
   assigned
     .filter((m) => m.round === 1)
     .forEach((m, i) => {
-      const [home, away] = quarterScores[i % quarterScores.length];
-      m.result = { home, away, recordedAt: now };
+      const sets = quarterSetScores[i % quarterSetScores.length];
+      const home = sets.filter((s) => s.home > s.away).length;
+      m.result = { home, away: sets.length - home, sets, recordedAt: now };
     });
   copaIsla.schedule = {
     published: true,

@@ -13,6 +13,7 @@ import type {
 import {
   APPROVAL_STATUS_LABELS,
   categoryLabel,
+  formatSetScores,
   isBracketEligible,
 } from "@/lib/types";
 import {
@@ -450,8 +451,15 @@ function AgendaRow({
           {item.homeLabel} <span className="text-zinc-400">vs</span> {item.awayLabel}
         </span>
         {match.result ? (
-          <span className="rounded-md bg-zinc-900 px-2 py-0.5 text-xs font-semibold text-white">
-            {match.result.home}–{match.result.away}
+          <span className="flex items-center gap-1.5">
+            <span className="rounded-md bg-zinc-900 px-2 py-0.5 text-xs font-semibold text-white">
+              {match.result.home}–{match.result.away}
+            </span>
+            {formatSetScores(match.result) ? (
+              <span className="hidden text-[11px] tabular-nums text-zinc-400 lg:inline">
+                ({formatSetScores(match.result)})
+              </span>
+            ) : null}
           </span>
         ) : (
           <span className="text-[11px] uppercase tracking-wide text-zinc-400">
@@ -1107,10 +1115,16 @@ function BracketMatchCard({ cs, match }: { cs: CategorySchedule; match: Match })
         </span>
         {match.result ? <span className="tabular-nums">{match.result.away}</span> : null}
       </div>
-      {!bye && (match.startsAt || match.court) ? (
+      {!bye && (match.startsAt || match.court || formatSetScores(match.result)) ? (
         <div className="border-t border-zinc-100 bg-zinc-50 px-3 py-1 text-[11px] text-zinc-500">
-          {formatTime(match.startsAt)}
-          {match.court ? ` · ${match.court}` : ""}
+          {formatSetScores(match.result) ? (
+            <span className="tabular-nums">{formatSetScores(match.result)}</span>
+          ) : (
+            <>
+              {formatTime(match.startsAt)}
+              {match.court ? ` · ${match.court}` : ""}
+            </>
+          )}
         </div>
       ) : null}
     </div>
@@ -1120,6 +1134,23 @@ function BracketMatchCard({ cs, match }: { cs: CategorySchedule; match: Match })
 // ---------------------------------------------------------------------------
 // Fila de partido (lista)
 // ---------------------------------------------------------------------------
+
+const MAX_SETS = 5;
+
+interface SetInput {
+  h: string;
+  a: string;
+}
+
+function setsFromResult(match: Match): SetInput[] {
+  const existing = match.result?.sets?.map((s) => ({
+    h: String(s.home),
+    a: String(s.away),
+  }));
+  const rows = existing ?? [];
+  while (rows.length < 3) rows.push({ h: "", a: "" });
+  return rows;
+}
 
 function MatchRow({
   cs,
@@ -1138,19 +1169,61 @@ function MatchRow({
   const away = resolveSide(cs, match.away);
   const ready = home.decided && away.decided;
   const [editing, setEditing] = useState(false);
-  const [homeScore, setHomeScore] = useState(match.result?.home?.toString() ?? "");
-  const [awayScore, setAwayScore] = useState(match.result?.away?.toString() ?? "");
+  const [scoring, setScoring] = useState(false);
+  const [setInputs, setSetInputs] = useState<SetInput[]>(() => setsFromResult(match));
+  const [scoreError, setScoreError] = useState<string | null>(null);
   const [timeLocal, setTimeLocal] = useState(toLocalInput(match.startsAt));
   const [court, setCourt] = useState(match.court ?? "");
 
-  function saveResult() {
-    const h = Number(homeScore);
-    const a = Number(awayScore);
-    if (!Number.isFinite(h) || !Number.isFinite(a) || homeScore === "" || awayScore === "") {
+  function openScorer() {
+    setSetInputs(setsFromResult(match));
+    setScoreError(null);
+    setScoring(true);
+    setEditing(false);
+  }
+
+  function updateSet(index: number, side: "h" | "a", value: string) {
+    setSetInputs((prev) =>
+      prev.map((s, i) => (i === index ? { ...s, [side]: value } : s)),
+    );
+  }
+
+  function saveSets() {
+    const complete = setInputs
+      .map((s) => ({ home: Number(s.h), away: Number(s.a), raw: s }))
+      .filter(
+        (s) =>
+          s.raw.h !== "" &&
+          s.raw.a !== "" &&
+          Number.isFinite(s.home) &&
+          Number.isFinite(s.away) &&
+          s.home >= 0 &&
+          s.away >= 0,
+      );
+    if (complete.length === 0) {
+      setScoreError("Anota al menos un set completo.");
       return;
     }
-    if (h === a) return; // en voleibol no hay empates
-    onUpdate({ result: { home: h, away: a, recordedAt: new Date().toISOString() } });
+    if (complete.some((s) => s.home === s.away)) {
+      setScoreError("Un set no puede terminar empatado.");
+      return;
+    }
+    const setsHome = complete.filter((s) => s.home > s.away).length;
+    const setsAway = complete.length - setsHome;
+    if (setsHome === setsAway) {
+      setScoreError("El partido no puede quedar empatado en sets.");
+      return;
+    }
+    setScoreError(null);
+    onUpdate({
+      result: {
+        home: setsHome,
+        away: setsAway,
+        sets: complete.map((s) => ({ home: s.home, away: s.away })),
+        recordedAt: new Date().toISOString(),
+      },
+    });
+    setScoring(false);
   }
 
   function saveAssignment() {
@@ -1162,6 +1235,7 @@ function MatchRow({
   }
 
   const winnerHome = match.result != null && match.result.home > match.result.away;
+  const setsLine = formatSetScores(match.result);
 
   return (
     <div className="rounded-lg border border-zinc-200 px-3 py-2.5">
@@ -1188,64 +1262,140 @@ function MatchRow({
           </span>
         </div>
         {match.result ? (
-          <span className="rounded-md bg-zinc-900 px-2 py-0.5 text-sm font-semibold text-white">
-            {match.result.home} – {match.result.away}
-          </span>
-        ) : ready ? (
-          <div className="flex items-center gap-1.5">
-            <input
-              type="number"
-              min={0}
-              className="w-14 rounded-lg border border-zinc-300 px-2 py-1 text-center text-sm"
-              value={homeScore}
-              onChange={(e) => setHomeScore(e.target.value)}
-              aria-label="Sets local"
-            />
-            <span className="text-xs text-zinc-400">–</span>
-            <input
-              type="number"
-              min={0}
-              className="w-14 rounded-lg border border-zinc-300 px-2 py-1 text-center text-sm"
-              value={awayScore}
-              onChange={(e) => setAwayScore(e.target.value)}
-              aria-label="Sets visitante"
-            />
-            <button
-              type="button"
-              className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-              disabled={saving}
-              onClick={saveResult}
-            >
-              Anotar
-            </button>
+          <div className="flex items-center gap-2">
+            <span className="rounded-md bg-zinc-900 px-2 py-0.5 text-sm font-semibold text-white">
+              {match.result.home} – {match.result.away}
+            </span>
+            {setsLine ? (
+              <span className="text-xs tabular-nums text-zinc-500">({setsLine})</span>
+            ) : null}
           </div>
+        ) : ready ? (
+          <button
+            type="button"
+            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            disabled={saving}
+            onClick={() => (scoring ? setScoring(false) : openScorer())}
+          >
+            {scoring ? "Cancelar" : "Anotar"}
+          </button>
         ) : (
           <span className="text-xs italic text-zinc-400">Por definir</span>
         )}
         <div className="flex items-center gap-2">
           {match.result ? (
-            <button
-              type="button"
-              className="text-xs text-zinc-500 hover:text-red-600 hover:underline"
-              disabled={saving}
-              onClick={() => {
-                setHomeScore("");
-                setAwayScore("");
-                onUpdate({ result: null });
-              }}
-            >
-              Borrar resultado
-            </button>
+            <>
+              <button
+                type="button"
+                className="text-xs text-indigo-600 hover:underline"
+                disabled={saving}
+                onClick={openScorer}
+              >
+                Editar sets
+              </button>
+              <button
+                type="button"
+                className="text-xs text-zinc-500 hover:text-red-600 hover:underline"
+                disabled={saving}
+                onClick={() => {
+                  setScoring(false);
+                  onUpdate({ result: null });
+                }}
+              >
+                Borrar resultado
+              </button>
+            </>
           ) : null}
           <button
             type="button"
             className="text-xs text-indigo-600 hover:underline"
-            onClick={() => setEditing((v) => !v)}
+            onClick={() => {
+              setEditing((v) => !v);
+              setScoring(false);
+            }}
           >
             {editing ? "Cancelar" : "Editar horario"}
           </button>
         </div>
       </div>
+
+      {/* Anotador por sets */}
+      {scoring ? (
+        <div className="mt-3 border-t border-zinc-100 pt-3">
+          <div className="flex flex-wrap items-start gap-4">
+            <table className="text-sm">
+              <thead>
+                <tr className="text-left text-xs text-zinc-400">
+                  <th className="pb-1 pr-3 font-medium" />
+                  <th className="w-20 pb-1 pr-2 text-center font-medium">
+                    <span className="block max-w-20 truncate">{home.label}</span>
+                  </th>
+                  <th className="w-20 pb-1 text-center font-medium">
+                    <span className="block max-w-20 truncate">{away.label}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {setInputs.map((s, i) => (
+                  <tr key={i}>
+                    <td className="py-1 pr-3 text-xs font-medium text-zinc-500">
+                      Set {i + 1}
+                    </td>
+                    <td className="py-1 pr-2">
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-20 rounded-lg border border-zinc-300 px-2 py-1 text-center text-sm"
+                        value={s.h}
+                        onChange={(e) => updateSet(i, "h", e.target.value)}
+                        aria-label={`Set ${i + 1} puntos ${home.label}`}
+                      />
+                    </td>
+                    <td className="py-1">
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-20 rounded-lg border border-zinc-300 px-2 py-1 text-center text-sm"
+                        value={s.a}
+                        onChange={(e) => updateSet(i, "a", e.target.value)}
+                        aria-label={`Set ${i + 1} puntos ${away.label}`}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex flex-col gap-2">
+              {setInputs.length < MAX_SETS ? (
+                <button
+                  type="button"
+                  className="rounded-lg border border-dashed border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-500 hover:border-indigo-400 hover:text-indigo-600"
+                  onClick={() => setSetInputs((prev) => [...prev, { h: "", a: "" }])}
+                >
+                  + Añadir set
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                disabled={saving}
+                onClick={saveSets}
+              >
+                {saving ? "Guardando…" : "Guardar resultado"}
+              </button>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-zinc-400">
+            Los sets vacíos se ignoran. El ganador del partido se calcula por sets ganados.
+          </p>
+          {scoreError ? (
+            <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+              {scoreError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {editing ? (
         <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-zinc-100 pt-3">
           <div>

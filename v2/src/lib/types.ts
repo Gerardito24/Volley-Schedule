@@ -163,10 +163,26 @@ export type MatchSide =
   | { type: "pool"; poolId: string; rank: number } // rank 1 = primero del pool
   | { type: "bye" };
 
-export interface MatchResult {
+/** Puntos de un set (p. ej. 25–20). */
+export interface SetScore {
   home: number;
   away: number;
+}
+
+export interface MatchResult {
+  /** Sets ganados por el local (derivado de `sets` cuando existe) */
+  home: number;
+  /** Sets ganados por el visitante */
+  away: number;
+  /** Marcador punto a punto de cada set, en orden */
+  sets?: SetScore[];
   recordedAt: string;
+}
+
+/** "25-20 · 23-25 · 15-12" o null si el resultado no tiene detalle de sets. */
+export function formatSetScores(result: MatchResult | null | undefined): string | null {
+  if (!result?.sets || result.sets.length === 0) return null;
+  return result.sets.map((s) => `${s.home}-${s.away}`).join(" · ");
 }
 
 export interface Match {

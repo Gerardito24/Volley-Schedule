@@ -1,5 +1,5 @@
 import type { CategorySchedule, Match, Tournament } from "@/lib/types";
-import { categoryLabel } from "@/lib/types";
+import { categoryLabel, formatSetScores } from "@/lib/types";
 import {
   categoryChampion,
   computePoolStandings,
@@ -54,13 +54,20 @@ function MatchRow({ cs, match }: { cs: CategorySchedule; match: Match }) {
           {away.label}
         </span>
       </div>
-      <div className="shrink-0">
+      <div className="flex shrink-0 flex-col items-end gap-0.5">
         {result ? (
-          <span className="rounded-lg bg-zinc-800 px-2.5 py-1 text-sm font-bold tabular-nums text-zinc-100">
-            <span className={homeWins ? "text-amber-400" : undefined}>{result.home}</span>
-            <span className="mx-1 text-zinc-500">–</span>
-            <span className={awayWins ? "text-amber-400" : undefined}>{result.away}</span>
-          </span>
+          <>
+            <span className="rounded-lg bg-zinc-800 px-2.5 py-1 text-sm font-bold tabular-nums text-zinc-100">
+              <span className={homeWins ? "text-amber-400" : undefined}>{result.home}</span>
+              <span className="mx-1 text-zinc-500">–</span>
+              <span className={awayWins ? "text-amber-400" : undefined}>{result.away}</span>
+            </span>
+            {formatSetScores(result) ? (
+              <span className="text-[11px] tabular-nums text-zinc-500">
+                {formatSetScores(result)}
+              </span>
+            ) : null}
+          </>
         ) : (
           <span className="rounded-full border border-zinc-700 px-2.5 py-1 text-xs font-medium text-zinc-400">
             Por jugar
