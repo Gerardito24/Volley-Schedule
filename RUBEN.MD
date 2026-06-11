@@ -28,8 +28,9 @@ Documento de mano para retomar sin perder contexto. **No sustituye** el README d
 
 ```powershell
 cd "C:\Dev\volleyschedule-registrations\v2"
-npm install          # solo la primera vez
-npm run dev          # http://localhost:3001
+npm install                 # solo la primera vez
+Copy-Item .env.example .env.local   # y edita DATABASE_URL (Postgres)
+npm run dev                 # http://localhost:3001
 ```
 
 | URL | Qué es |
@@ -45,14 +46,17 @@ npm run dev          # http://localhost:3001
 ### Arquitectura (a diferencia del app original)
 
 ```
-Público + Admin  →  API routes (Next.js)  →  v2/data/*.json
-                                              ↑ seed automático al primer arranque
+Público + Admin  →  API routes (Next.js)  →  Postgres (tablas vh_*)
+                                              ↑ crea tablas + seed al primer arranque
 ```
 
-- **Una sola fuente de verdad:** archivos JSON en `v2/data/` (`tournaments.json`, `registrations.json`, `clubs.json`, `rosters.json`, `admins.json`).
-- **Sin** Postgres, **sin** localStorage para datos de negocio (solo borrador de inscripción en el navegador).
+- **Una sola fuente de verdad:** **Postgres**. Cada colección es una tabla `vh_<nombre>` con `(id text, data jsonb)`: `vh_tournaments`, `vh_registrations`, `vh_clubs`, `vh_rosters`, `vh_admins`.
+- Cliente en `v2/src/lib/db.ts` (postgres.js, igual driver que el app original); acceso a datos en `v2/src/lib/store.ts`.
+- Prefijo `vh_` para poder **reusar el mismo Postgres** del app de producción sin chocar con sus tablas.
+- **Sin** localStorage para datos de negocio (solo borrador de inscripción en el navegador).
 - **Sin** split Vercel (`NEXT_PUBLIC_APP_SURFACE`); todo en un host, puerto **3001**.
-- Carpeta `v2/data/` está en `.gitignore` — se regenera sola; para reset demo: borrar `v2/data/` y reiniciar `npm run dev`.
+- Config: copiar `v2/.env.example` → `v2/.env.local` y poner `DATABASE_URL`. Para reset demo: `TRUNCATE` (o borrar) las tablas `vh_*` y reiniciar — v2 vuelve a sembrar.
+- **No requiere migración manual:** las tablas se crean solas en la primera petición.
 
 ### Datos demo incluidos (seed)
 
@@ -185,9 +189,9 @@ $env:NEXT_PUBLIC_APP_SURFACE="admin"; npm run dev -- -p 3001
 
 ### VolleyV2 (`v2/`)
 
-1. Probar flujos manualmente en http://localhost:3001.
-2. Decidir si migrar ideas de v2 al app de producción o seguir iterando en v2.
-3. Opcional: conectar v2 a Postgres más adelante (hoy es solo JSON local).
+1. Poner `DATABASE_URL` en `v2/.env.local` y probar flujos en http://localhost:3001 (siembra sola al primer arranque).
+2. Deploy a Vercel: definir `DATABASE_URL` (y/o `DATABASE_URL_POOLED`) en el proyecto; no requiere paso de migración.
+3. Decidir si v2 reemplaza al app original como producción o si se siguen migrando ideas pieza por pieza.
 
 ### App original (producción)
 

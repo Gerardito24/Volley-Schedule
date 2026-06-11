@@ -1,5 +1,3 @@
-import { promises as fs } from "fs";
-import path from "path";
 import type {
   AdminUser,
   ClubProfile,
@@ -8,8 +6,13 @@ import type {
   Tournament,
 } from "./types";
 import { buildSeedData } from "./seed";
+import { sql } from "./db";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+// Almacenamiento en Postgres. Cada colección es una tabla `vh_<name>` con
+// (id text PRIMARY KEY, data jsonb). El prefijo `vh_` evita chocar con las
+// tablas del app de producción si se comparte la misma base de datos.
+// Las tablas se crean y se siembran (datos demo) automáticamente la primera
+// vez, igual que hacía la versión basada en archivos JSON.
 
 type CollectionName =
   | "tournaments"
@@ -26,55 +29,103 @@ interface CollectionTypes {
   admins: AdminUser;
 }
 
-let seeded = false;
+const COLLECTIONS: CollectionName[] = [
+  "tournaments",
+  "registrations",
+  "clubs",
+  "rosters",
+  "admins",
+];
 
-async function ensureSeeded(): Promise<void> {
-  if (seeded) return;
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  const marker = path.join(DATA_DIR, "tournaments.json");
-  try {
-    await fs.access(marker);
-  } catch {
-    const seed = buildSeedData();
-    await Promise.all([
-      writeFileRaw("tournaments", seed.tournaments),
-      writeFileRaw("registrations", seed.registrations),
-      writeFileRaw("clubs", seed.clubs),
-      writeFileRaw("rosters", seed.rosters),
-      writeFileRaw("admins", seed.admins),
-    ]);
+function tableFor(name: CollectionName): string {
+  return `vh_${name}`;
+}
+
+/** Clave primaria natural de cada colección. */
+function keyOf<N extends CollectionName>(
+  name: N,
+  item: CollectionTypes[N],
+): string {
+  switch (name) {
+    case "tournaments":
+      return (item as Tournament).slug;
+    case "clubs":
+      return (item as ClubProfile).clubSlug;
+    default:
+      // registrations, rosters, admins
+      return (item as { id: string }).id;
   }
-  seeded = true;
 }
 
-function fileFor(name: CollectionName): string {
-  return path.join(DATA_DIR, `${name}.json`);
+let ready: Promise<void> | null = null;
+
+/** Reemplaza el contenido completo de una colección en una transacción. */
+async function replaceAll<N extends CollectionName>(
+  name: N,
+  items: CollectionTypes[N][],
+): Promise<void> {
+  const table = tableFor(name);
+  await sql.begin(async (tx) => {
+    await tx`DELETE FROM ${tx(table)}`;
+    for (const item of items) {
+      await tx`
+        INSERT INTO ${tx(table)} (id, data)
+        VALUES (${keyOf(name, item)}, ${tx.json(
+          item as unknown as Parameters<typeof tx.json>[0],
+        )})
+      `;
+    }
+  });
 }
 
-async function writeFileRaw(name: CollectionName, value: unknown): Promise<void> {
-  const tmp = `${fileFor(name)}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(value, null, 2), "utf8");
-  await fs.rename(tmp, fileFor(name));
+/** Crea las tablas si faltan y siembra datos demo si están vacías. */
+async function ensureReady(): Promise<void> {
+  if (ready) return ready;
+  ready = (async () => {
+    for (const name of COLLECTIONS) {
+      const table = tableFor(name);
+      await sql`
+        CREATE TABLE IF NOT EXISTS ${sql(table)} (
+          id text PRIMARY KEY,
+          data jsonb NOT NULL
+        )
+      `;
+    }
+    const counted = await sql<{ count: number }[]>`
+      SELECT count(*)::int AS count FROM ${sql(tableFor("tournaments"))}
+    `;
+    if (counted[0]?.count === 0) {
+      const seed = buildSeedData();
+      await replaceAll("tournaments", seed.tournaments);
+      await replaceAll("registrations", seed.registrations);
+      await replaceAll("clubs", seed.clubs);
+      await replaceAll("rosters", seed.rosters);
+      await replaceAll("admins", seed.admins);
+    }
+  })().catch((err) => {
+    // Permitir reintentar el bootstrap en la próxima petición si algo falló.
+    ready = null;
+    throw err;
+  });
+  return ready;
 }
 
 export async function readCollection<N extends CollectionName>(
   name: N,
 ): Promise<CollectionTypes[N][]> {
-  await ensureSeeded();
-  try {
-    const raw = await fs.readFile(fileFor(name), "utf8");
-    return JSON.parse(raw) as CollectionTypes[N][];
-  } catch {
-    return [];
-  }
+  await ensureReady();
+  const rows = await sql<{ data: CollectionTypes[N] }[]>`
+    SELECT data FROM ${sql(tableFor(name))}
+  `;
+  return rows.map((row) => row.data);
 }
 
 export async function writeCollection<N extends CollectionName>(
   name: N,
   items: CollectionTypes[N][],
 ): Promise<void> {
-  await ensureSeeded();
-  await writeFileRaw(name, items);
+  await ensureReady();
+  await replaceAll(name, items);
 }
 
 // ---------------------------------------------------------------------------
