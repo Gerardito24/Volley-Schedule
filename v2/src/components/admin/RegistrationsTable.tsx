@@ -3,9 +3,13 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { RegistrationStatus } from "@/lib/types";
-import { REGISTRATION_STATUS_LABELS, formatDateEs, formatUsd } from "@/lib/types";
-import { RegistrationStatusChip } from "./StatusChip";
+import type { ApprovalStatus, PaymentStatus } from "@/lib/types";
+import {
+  APPROVAL_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS,
+  formatDateEs,
+  formatUsd,
+} from "@/lib/types";
 import { card, inputClass } from "./ui";
 
 export interface RegistrationRow {
@@ -17,7 +21,8 @@ export interface RegistrationRow {
   categoryLabel: string;
   registeredAt: string; // ISO
   feeCents: number;
-  status: RegistrationStatus;
+  approval: ApprovalStatus;
+  paymentStatus: PaymentStatus;
 }
 
 interface RegistrationsTableProps {
@@ -26,10 +31,17 @@ interface RegistrationsTableProps {
   showTournamentFilter?: boolean;
 }
 
-const STATUS_ENTRIES = Object.entries(REGISTRATION_STATUS_LABELS) as [
-  RegistrationStatus,
+const APPROVAL_ENTRIES = Object.entries(APPROVAL_STATUS_LABELS) as [
+  ApprovalStatus,
   string,
 ][];
+
+const APPROVAL_SELECT_STYLES: Record<ApprovalStatus, string> = {
+  pending: "border-violet-300 bg-violet-50 text-violet-800",
+  approved: "border-emerald-300 bg-emerald-50 text-emerald-800",
+  rejected: "border-red-300 bg-red-50 text-red-800",
+  waitlisted: "border-zinc-300 bg-zinc-50 text-zinc-600",
+};
 
 export default function RegistrationsTable({
   registrations,
@@ -39,7 +51,8 @@ export default function RegistrationsTable({
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [tournamentFilter, setTournamentFilter] = useState("todos");
-  const [statusFilter, setStatusFilter] = useState<"todos" | RegistrationStatus>("todos");
+  const [approvalFilter, setApprovalFilter] = useState<"todos" | ApprovalStatus>("todos");
+  const [paymentFilter, setPaymentFilter] = useState<"todos" | PaymentStatus>("todos");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +60,8 @@ export default function RegistrationsTable({
     const q = query.trim().toLowerCase();
     return registrations.filter((r) => {
       if (tournamentFilter !== "todos" && r.tournamentSlug !== tournamentFilter) return false;
-      if (statusFilter !== "todos" && r.status !== statusFilter) return false;
+      if (approvalFilter !== "todos" && r.approval !== approvalFilter) return false;
+      if (paymentFilter !== "todos" && r.paymentStatus !== paymentFilter) return false;
       if (
         q &&
         !r.clubName.toLowerCase().includes(q) &&
@@ -57,20 +71,20 @@ export default function RegistrationsTable({
       }
       return true;
     });
-  }, [registrations, query, tournamentFilter, statusFilter]);
+  }, [registrations, query, tournamentFilter, approvalFilter, paymentFilter]);
 
-  async function changeStatus(id: string, status: RegistrationStatus) {
+  async function patch(id: string, body: Record<string, unknown>) {
     setError(null);
     setBusyId(id);
     try {
       const res = await fetch(`/api/registrations/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError(data?.error ?? "No se pudo actualizar el estado.");
+        setError(data?.error ?? "No se pudo actualizar.");
         return;
       }
       router.refresh();
@@ -83,7 +97,7 @@ export default function RegistrationsTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <input
           type="search"
           value={query}
@@ -95,7 +109,7 @@ export default function RegistrationsTable({
           <select
             value={tournamentFilter}
             onChange={(e) => setTournamentFilter(e.target.value)}
-            className={`${inputClass} sm:max-w-[240px]`}
+            className={`${inputClass} sm:max-w-[220px]`}
             aria-label="Filtrar por torneo"
           >
             <option value="todos">Todos los torneos</option>
@@ -107,17 +121,27 @@ export default function RegistrationsTable({
           </select>
         )}
         <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as "todos" | RegistrationStatus)}
-          className={`${inputClass} sm:max-w-[200px]`}
-          aria-label="Filtrar por estado"
+          value={approvalFilter}
+          onChange={(e) => setApprovalFilter(e.target.value as "todos" | ApprovalStatus)}
+          className={`${inputClass} sm:max-w-[180px]`}
+          aria-label="Filtrar por aprobación"
         >
-          <option value="todos">Todos los estados</option>
-          {STATUS_ENTRIES.map(([value, label]) => (
+          <option value="todos">Aprobación: todas</option>
+          {APPROVAL_ENTRIES.map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
+        </select>
+        <select
+          value={paymentFilter}
+          onChange={(e) => setPaymentFilter(e.target.value as "todos" | PaymentStatus)}
+          className={`${inputClass} sm:max-w-[160px]`}
+          aria-label="Filtrar por pago"
+        >
+          <option value="todos">Pago: todos</option>
+          <option value="paid">{PAYMENT_STATUS_LABELS.paid}</option>
+          <option value="unpaid">{PAYMENT_STATUS_LABELS.unpaid}</option>
         </select>
       </div>
 
@@ -134,7 +158,7 @@ export default function RegistrationsTable({
         </div>
       ) : (
         <div className={`${card} thin-scroll overflow-x-auto`}>
-          <table className="w-full min-w-[860px] text-left text-sm">
+          <table className="w-full min-w-[900px] text-left text-sm">
             <thead>
               <tr className="border-b border-zinc-200 text-xs uppercase tracking-wider text-zinc-500">
                 <th className="px-4 py-3 font-medium">Equipo / Club</th>
@@ -142,8 +166,9 @@ export default function RegistrationsTable({
                 <th className="px-4 py-3 font-medium">Categoría</th>
                 <th className="px-4 py-3 font-medium">Fecha</th>
                 <th className="px-4 py-3 font-medium">Tarifa</th>
-                <th className="px-4 py-3 font-medium">Estado</th>
-                <th className="px-4 py-3 font-medium">Acciones</th>
+                <th className="px-4 py-3 font-medium">Aprobación</th>
+                <th className="px-4 py-3 font-medium">Pago</th>
+                <th className="px-4 py-3 font-medium" />
               </tr>
             </thead>
             <tbody>
@@ -160,32 +185,46 @@ export default function RegistrationsTable({
                   </td>
                   <td className="px-4 py-3 text-zinc-500">{formatUsd(r.feeCents)}</td>
                   <td className="px-4 py-3">
-                    <RegistrationStatusChip status={r.status} />
+                    <select
+                      value={r.approval}
+                      disabled={busyId === r.id}
+                      onChange={(e) => void patch(r.id, { approval: e.target.value })}
+                      className={`rounded-full border px-2.5 py-1 text-xs font-medium focus:outline-none disabled:opacity-50 ${APPROVAL_SELECT_STYLES[r.approval]}`}
+                      aria-label="Cambiar aprobación"
+                    >
+                      {APPROVAL_ENTRIES.map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={r.status}
-                        disabled={busyId === r.id}
-                        onChange={(e) =>
-                          changeStatus(r.id, e.target.value as RegistrationStatus)
-                        }
-                        className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-700 focus:border-indigo-500 focus:outline-none disabled:opacity-50"
-                        aria-label="Cambiar estado"
-                      >
-                        {STATUS_ENTRIES.map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                      <Link
-                        href={`/admin/inscripciones/${r.id}`}
-                        className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
-                      >
-                        Ver
-                      </Link>
-                    </div>
+                    <button
+                      type="button"
+                      disabled={busyId === r.id}
+                      onClick={() =>
+                        void patch(r.id, {
+                          paymentStatus: r.paymentStatus === "paid" ? "unpaid" : "paid",
+                        })
+                      }
+                      className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+                        r.paymentStatus === "paid"
+                          ? "border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100"
+                          : "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                      }`}
+                      title="Click para alternar el estado de pago"
+                    >
+                      {r.paymentStatus === "paid" ? "✓ Pagado" : "Debe"}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/admin/inscripciones/${r.id}`}
+                      className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                    >
+                      Ver
+                    </Link>
                   </td>
                 </tr>
               ))}

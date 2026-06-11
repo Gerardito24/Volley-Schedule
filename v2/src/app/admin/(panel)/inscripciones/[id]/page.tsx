@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getRegistration, getRosterByRegistration, getTournament } from "@/lib/store";
 import { categoryLabel, formatDateEs, formatUsd } from "@/lib/types";
-import { RegistrationStatusChip } from "@/components/admin/StatusChip";
+import { ApprovalStatusChip, PaymentStatusChip } from "@/components/admin/StatusChip";
 import RegistrationEditor from "@/components/admin/RegistrationEditor";
 import { card } from "@/components/admin/ui";
 import type { Coach } from "@/lib/types";
@@ -51,7 +51,8 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold text-zinc-900">{registration.teamName}</h1>
-          <RegistrationStatusChip status={registration.status} />
+          <ApprovalStatusChip status={registration.approval} />
+          <PaymentStatusChip status={registration.paymentStatus} />
         </div>
         <p className="mt-1 text-sm text-zinc-500">
           {registration.clubName} · {tournament?.name ?? registration.tournamentSlug}
@@ -159,7 +160,8 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
 
       <RegistrationEditor
         registrationId={registration.id}
-        initialStatus={registration.status}
+        initialApproval={registration.approval}
+        initialPaymentStatus={registration.paymentStatus}
         initialTeamName={registration.teamName}
         initialFeeCents={registration.feeCents}
         initialComments={registration.comments ?? ""}

@@ -2,10 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getRegistrations, getTournament } from "@/lib/store";
 import {
-  BRACKET_ELIGIBLE_STATUSES,
   categoryLabel,
   formatDateEs,
   formatDateRangeEs,
+  isBracketEligible,
 } from "@/lib/types";
 import { TournamentStatusChip } from "@/components/admin/StatusChip";
 import RegistrationsTable, {
@@ -41,9 +41,7 @@ export default async function TournamentDetailPage({ params, searchParams }: Pag
   const tab: TabId = TABS.some((t) => t.id === rawTab) ? (rawTab as TabId) : "resumen";
   const registrations = await getRegistrations({ tournamentSlug: slug });
 
-  const eligibleCount = registrations.filter((r) =>
-    BRACKET_ELIGIBLE_STATUSES.includes(r.status),
-  ).length;
+  const eligibleCount = registrations.filter(isBracketEligible).length;
   const totalCourts = tournament.venues.reduce((sum, v) => sum + v.courtCount, 0);
 
   const categoryById = new Map(tournament.categories.map((c) => [c.id, c]));
@@ -58,7 +56,8 @@ export default async function TournamentDetailPage({ params, searchParams }: Pag
       categoryLabel: category ? categoryLabel(tournament, category) : "—",
       registeredAt: r.registeredAt,
       feeCents: r.feeCents,
-      status: r.status,
+      approval: r.approval,
+      paymentStatus: r.paymentStatus,
     };
   });
 

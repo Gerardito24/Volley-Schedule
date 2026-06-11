@@ -6,6 +6,7 @@ import type {
   TeamRoster,
   Tournament,
 } from "./types";
+import { normalizeRegistration } from "./types";
 import { buildSeedData } from "./seed";
 import { sql } from "./db";
 
@@ -174,12 +175,15 @@ export async function getRegistrations(filter?: {
   if (filter?.clubSlug) {
     items = items.filter((r) => r.clubSlug === filter.clubSlug);
   }
-  return items.sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
+  return items
+    .map(normalizeRegistration)
+    .sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
 }
 
 export async function getRegistration(id: string): Promise<Registration | null> {
   const items = await readCollection("registrations");
-  return items.find((r) => r.id === id) ?? null;
+  const found = items.find((r) => r.id === id);
+  return found ? normalizeRegistration(found) : null;
 }
 
 export async function saveRegistration(registration: Registration): Promise<void> {

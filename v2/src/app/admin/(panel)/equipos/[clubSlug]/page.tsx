@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getClub, getRegistrations, getRosters, getTournaments } from "@/lib/store";
-import { categoryLabel, REGISTRATION_STATUS_LABELS, type TeamRoster } from "@/lib/types";
+import {
+  categoryLabel,
+  type ApprovalStatus,
+  type PaymentStatus,
+  type TeamRoster,
+} from "@/lib/types";
 import ClubProfileForm from "@/components/admin/ClubProfileForm";
+import { ApprovalStatusChip, PaymentStatusChip } from "@/components/admin/StatusChip";
 import { card } from "@/components/admin/ui";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +19,11 @@ interface PageProps {
 
 interface CategoryGroup {
   label: string;
-  rosters: (TeamRoster & { tournamentName: string; status?: string })[];
+  rosters: (TeamRoster & {
+    tournamentName: string;
+    approval?: ApprovalStatus;
+    paymentStatus?: PaymentStatus;
+  })[];
 }
 
 export default async function ClubDetailPage({ params }: PageProps) {
@@ -28,7 +38,7 @@ export default async function ClubDetailPage({ params }: PageProps) {
   ]);
 
   const tournamentBySlug = new Map(tournaments.map((t) => [t.slug, t]));
-  const statusByRegistration = new Map(registrations.map((r) => [r.id, r.status]));
+  const registrationById = new Map(registrations.map((r) => [r.id, r]));
 
   // Agrupar equipos por categoría (la misma categoría en torneos distintos se
   // unifica por su etiqueta, p. ej. "14U Open Femenino").
@@ -39,10 +49,12 @@ export default async function ClubDetailPage({ params }: PageProps) {
     const label =
       tournament && category ? categoryLabel(tournament, category) : "Sin categoría";
     const group = groups.get(label) ?? { label, rosters: [] };
+    const registration = registrationById.get(roster.registrationId);
     group.rosters.push({
       ...roster,
       tournamentName: tournament?.name ?? roster.tournamentSlug,
-      status: statusByRegistration.get(roster.registrationId),
+      approval: registration?.approval,
+      paymentStatus: registration?.paymentStatus,
     });
     groups.set(label, group);
   }
@@ -105,14 +117,9 @@ export default async function ClubDetailPage({ params }: PageProps) {
                           {r.tournamentName} · Coach: {r.coachName}
                         </p>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-zinc-500">
-                        {r.status && (
-                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-600">
-                            {REGISTRATION_STATUS_LABELS[
-                              r.status as keyof typeof REGISTRATION_STATUS_LABELS
-                            ] ?? r.status}
-                          </span>
-                        )}
+                      <div className="flex items-center gap-2 text-xs text-zinc-500">
+                        {r.approval && <ApprovalStatusChip status={r.approval} />}
+                        {r.paymentStatus && <PaymentStatusChip status={r.paymentStatus} />}
                         <span>{r.players.length} jugadoras/es →</span>
                       </div>
                     </Link>

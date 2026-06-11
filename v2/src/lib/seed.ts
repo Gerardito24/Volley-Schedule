@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from "crypto";
 import type {
   AdminUser,
+  ApprovalStatus,
   ClubProfile,
   Coach,
+  PaymentStatus,
   Player,
   Registration,
   RegistrationStatus,
@@ -14,6 +16,24 @@ import { autoAssignSchedule, generateSingleElim } from "./schedule-engine";
 
 export function hashPassword(password: string): string {
   return createHash("sha256").update(password).digest("hex");
+}
+
+/** Traduce el estado del modelo viejo a las dos dimensiones del nuevo. */
+function normalizeRegistrationStatus(legacy: RegistrationStatus): {
+  approval: ApprovalStatus;
+  paymentStatus: PaymentStatus;
+} {
+  const approval: ApprovalStatus =
+    legacy === "approved"
+      ? "approved"
+      : legacy === "rejected"
+        ? "rejected"
+        : legacy === "waitlisted"
+          ? "waitlisted"
+          : "pending";
+  const paymentStatus: PaymentStatus =
+    legacy === "paid" || legacy === "approved" ? "paid" : "unpaid";
+  return { approval, paymentStatus };
 }
 
 function isoDate(daysFromNow: number): string {
@@ -131,7 +151,7 @@ export function buildSeedData(): SeedData {
       comments: "",
       signatureName: club.contactName,
       termsAccepted: true,
-      status: opts.status,
+      ...normalizeRegistrationStatus(opts.status),
       feeCents: opts.feeCents,
       registeredAt,
       updatedAt: registeredAt,

@@ -1,5 +1,15 @@
-import type { RegistrationStatus, TournamentStatus } from "@/lib/types";
-import { REGISTRATION_STATUS_LABELS, TOURNAMENT_STATUS_LABELS } from "@/lib/types";
+import type {
+  ApprovalStatus,
+  PaymentStatus,
+  RegistrationStatus,
+  TournamentStatus,
+} from "@/lib/types";
+import {
+  APPROVAL_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS,
+  REGISTRATION_STATUS_LABELS,
+  TOURNAMENT_STATUS_LABELS,
+} from "@/lib/types";
 
 const REGISTRATION_STYLES: Record<RegistrationStatus, string> = {
   pending_payment: "bg-amber-100 text-amber-800 border-amber-200",
@@ -8,6 +18,18 @@ const REGISTRATION_STYLES: Record<RegistrationStatus, string> = {
   approved: "bg-emerald-100 text-emerald-800 border-emerald-200",
   rejected: "bg-red-100 text-red-800 border-red-200",
   waitlisted: "bg-zinc-100 text-zinc-600 border-zinc-200",
+};
+
+const APPROVAL_STYLES: Record<ApprovalStatus, string> = {
+  pending: "bg-violet-100 text-violet-800 border-violet-200",
+  approved: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  rejected: "bg-red-100 text-red-800 border-red-200",
+  waitlisted: "bg-zinc-100 text-zinc-600 border-zinc-200",
+};
+
+const PAYMENT_STYLES: Record<PaymentStatus, string> = {
+  unpaid: "bg-amber-100 text-amber-800 border-amber-200",
+  paid: "bg-sky-100 text-sky-800 border-sky-200",
 };
 
 const TOURNAMENT_STYLES: Record<TournamentStatus, string> = {
@@ -23,6 +45,23 @@ export function RegistrationStatusChip({ status }: { status: RegistrationStatus 
   return (
     <span className={`${chipBase} ${REGISTRATION_STYLES[status]}`}>
       {REGISTRATION_STATUS_LABELS[status]}
+    </span>
+  );
+}
+
+export function ApprovalStatusChip({ status }: { status: ApprovalStatus }) {
+  return (
+    <span className={`${chipBase} ${APPROVAL_STYLES[status]}`}>
+      {APPROVAL_STATUS_LABELS[status]}
+    </span>
+  );
+}
+
+export function PaymentStatusChip({ status }: { status: PaymentStatus }) {
+  return (
+    <span className={`${chipBase} ${PAYMENT_STYLES[status]}`}>
+      {status === "paid" ? "✓ " : ""}
+      {PAYMENT_STATUS_LABELS[status]}
     </span>
   );
 }

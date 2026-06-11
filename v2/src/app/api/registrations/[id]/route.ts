@@ -32,6 +32,12 @@ export async function PATCH(request: Request, { params }: Params) {
     tournamentSlug: existing.tournamentSlug,
     registeredAt: existing.registeredAt,
   };
+  // Registrar cuándo se marcó el pago (y limpiar si se revierte)
+  if (existing.paymentStatus !== "paid" && updated.paymentStatus === "paid") {
+    updated.paidAt = new Date().toISOString();
+  } else if (updated.paymentStatus === "unpaid") {
+    delete updated.paidAt;
+  }
   await saveRegistration(updated);
   return NextResponse.json({ registration: updated });
 }

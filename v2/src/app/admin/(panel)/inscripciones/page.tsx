@@ -27,7 +27,8 @@ export default async function AdminRegistrationsPage() {
       categoryLabel: tournament && category ? categoryLabel(tournament, category) : "—",
       registeredAt: r.registeredAt,
       feeCents: r.feeCents,
-      status: r.status,
+      approval: r.approval,
+      paymentStatus: r.paymentStatus,
     };
   });
 

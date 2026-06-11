@@ -7,7 +7,7 @@ import {
   formatUsd,
   isTournamentLive,
 } from "@/lib/types";
-import { RegistrationStatusChip } from "@/components/admin/StatusChip";
+import { ApprovalStatusChip, PaymentStatusChip } from "@/components/admin/StatusChip";
 import { btnPrimary, card } from "@/components/admin/ui";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +26,8 @@ export default async function AdminDashboardPage() {
   const live = tournaments.filter((t) => isTournamentLive(t) && t.schedule?.published);
 
   const needsAction = registrations
-    .filter((r) => r.status === "pending_payment" || r.status === "under_review")
+    .filter((r) => r.approval === "pending" || r.paymentStatus === "unpaid")
+    .filter((r) => r.approval !== "rejected")
     .sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
 
   const recent = [...registrations]
@@ -34,10 +35,10 @@ export default async function AdminDashboardPage() {
     .slice(0, 6);
 
   const collectedCents = registrations
-    .filter((r) => r.status === "paid" || r.status === "approved")
+    .filter((r) => r.paymentStatus === "paid")
     .reduce((sum, r) => sum + r.feeCents, 0);
   const pendingCents = registrations
-    .filter((r) => r.status === "pending_payment")
+    .filter((r) => r.paymentStatus === "unpaid" && r.approval !== "rejected")
     .reduce((sum, r) => sum + r.feeCents, 0);
 
   const metrics = [
@@ -168,7 +169,14 @@ export default async function AdminDashboardPage() {
                         </p>
                         <p className="truncate text-xs text-zinc-500">{d.catLine}</p>
                       </div>
-                      <RegistrationStatusChip status={r.status} />
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {r.approval === "pending" ? (
+                          <ApprovalStatusChip status={r.approval} />
+                        ) : null}
+                        {r.paymentStatus === "unpaid" ? (
+                          <PaymentStatusChip status={r.paymentStatus} />
+                        ) : null}
+                      </div>
                     </Link>
                   </li>
                 );

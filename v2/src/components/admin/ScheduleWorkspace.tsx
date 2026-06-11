@@ -11,9 +11,9 @@ import type {
   TournamentSchedule,
 } from "@/lib/types";
 import {
-  BRACKET_ELIGIBLE_STATUSES,
+  APPROVAL_STATUS_LABELS,
   categoryLabel,
-  REGISTRATION_STATUS_LABELS,
+  isBracketEligible,
 } from "@/lib/types";
 import {
   autoAssignSchedule,
@@ -528,7 +528,7 @@ function CategoryBuilder({
   const eligible = useMemo(
     () =>
       registrations
-        .filter((r) => BRACKET_ELIGIBLE_STATUSES.includes(r.status))
+        .filter(isBracketEligible)
         .sort((a, b) => a.registeredAt.localeCompare(b.registeredAt)),
     [registrations],
   );
@@ -658,7 +658,8 @@ function CategoryBuilder({
                     {r.teamName}
                   </span>
                   <span className="hidden text-xs text-zinc-400 sm:block">
-                    {REGISTRATION_STATUS_LABELS[r.status]}
+                    {APPROVAL_STATUS_LABELS[r.approval]}
+                    {r.paymentStatus === "paid" ? " · Pagado" : " · Debe"}
                   </span>
                   <div className="flex items-center gap-0.5">
                     <button

@@ -2,18 +2,32 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSessionClient } from "@/lib/client-auth";
 import { getRegistrations, getTournaments } from "@/lib/store";
-import { REGISTRATION_STATUS_LABELS, formatDateRangeEs } from "@/lib/types";
+import {
+  APPROVAL_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS,
+  formatDateRangeEs,
+  type ApprovalStatus,
+  type PaymentStatus,
+} from "@/lib/types";
 import LogoutButton from "@/components/public/LogoutButton";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_COLOR: Record<string, string> = {
-  pending_payment: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
-  paid:            "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  under_review:    "bg-purple-500/20 text-purple-300 border-purple-500/30",
-  approved:        "bg-green-500/20 text-green-300 border-green-500/30",
-  rejected:        "bg-red-500/20 text-red-300 border-red-500/30",
-  waitlisted:      "bg-zinc-500/20 text-zinc-300 border-zinc-500/30",
+const APPROVAL_COLOR: Record<ApprovalStatus, string> = {
+  pending:    "bg-purple-500/20 text-purple-300 border-purple-500/30",
+  approved:   "bg-green-500/20 text-green-300 border-green-500/30",
+  rejected:   "bg-red-500/20 text-red-300 border-red-500/30",
+  waitlisted: "bg-zinc-500/20 text-zinc-300 border-zinc-500/30",
+};
+
+const PAYMENT_COLOR: Record<PaymentStatus, string> = {
+  unpaid: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
+  paid:   "bg-blue-500/20 text-blue-300 border-blue-500/30",
+};
+
+const PAYMENT_PUBLIC_LABELS: Record<PaymentStatus, string> = {
+  unpaid: "Pago pendiente",
+  paid: PAYMENT_STATUS_LABELS.paid,
 };
 
 export default async function CuentaPage() {
@@ -78,11 +92,19 @@ export default async function CuentaPage() {
                     Inscrito {new Date(reg.registeredAt).toLocaleDateString("es-PR")}
                   </p>
                 </div>
-                <span
-                  className={`shrink-0 inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${STATUS_COLOR[reg.status] ?? "bg-zinc-800 text-zinc-300 border-zinc-700"}`}
-                >
-                  {REGISTRATION_STATUS_LABELS[reg.status] ?? reg.status}
-                </span>
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                  <span
+                    className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${APPROVAL_COLOR[reg.approval]}`}
+                  >
+                    {APPROVAL_STATUS_LABELS[reg.approval]}
+                  </span>
+                  <span
+                    className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${PAYMENT_COLOR[reg.paymentStatus]}`}
+                  >
+                    {reg.paymentStatus === "paid" ? "✓ " : ""}
+                    {PAYMENT_PUBLIC_LABELS[reg.paymentStatus]}
+                  </span>
+                </div>
               </div>
             );
           })}

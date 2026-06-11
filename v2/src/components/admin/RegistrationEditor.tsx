@@ -2,32 +2,35 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { RegistrationStatus } from "@/lib/types";
-import { REGISTRATION_STATUS_LABELS } from "@/lib/types";
+import type { ApprovalStatus, PaymentStatus } from "@/lib/types";
+import { APPROVAL_STATUS_LABELS } from "@/lib/types";
 import { btnPrimary, card, inputClass, labelClass } from "./ui";
 
 interface RegistrationEditorProps {
   registrationId: string;
-  initialStatus: RegistrationStatus;
+  initialApproval: ApprovalStatus;
+  initialPaymentStatus: PaymentStatus;
   initialTeamName: string;
   initialFeeCents: number;
   initialComments: string;
 }
 
-const STATUS_ENTRIES = Object.entries(REGISTRATION_STATUS_LABELS) as [
-  RegistrationStatus,
+const APPROVAL_ENTRIES = Object.entries(APPROVAL_STATUS_LABELS) as [
+  ApprovalStatus,
   string,
 ][];
 
 export default function RegistrationEditor({
   registrationId,
-  initialStatus,
+  initialApproval,
+  initialPaymentStatus,
   initialTeamName,
   initialFeeCents,
   initialComments,
 }: RegistrationEditorProps) {
   const router = useRouter();
-  const [status, setStatus] = useState<RegistrationStatus>(initialStatus);
+  const [approval, setApproval] = useState<ApprovalStatus>(initialApproval);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(initialPaymentStatus);
   const [teamName, setTeamName] = useState(initialTeamName);
   const [feeUsd, setFeeUsd] = useState(String(initialFeeCents / 100));
   const [comments, setComments] = useState(initialComments);
@@ -55,7 +58,8 @@ export default function RegistrationEditor({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status,
+          approval,
+          paymentStatus,
           teamName: teamName.trim(),
           feeCents: Math.round(fee * 100),
           comments: comments.trim(),
@@ -80,18 +84,45 @@ export default function RegistrationEditor({
       <h2 className="text-lg font-semibold text-zinc-900">Editar inscripción</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
-          <label className={labelClass}>Estado</label>
+          <label className={labelClass}>Aprobación (¿puede jugar?)</label>
           <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as RegistrationStatus)}
+            value={approval}
+            onChange={(e) => setApproval(e.target.value as ApprovalStatus)}
             className={inputClass}
           >
-            {STATUS_ENTRIES.map(([value, label]) => (
+            {APPROVAL_ENTRIES.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className={labelClass}>Pago</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPaymentStatus("paid")}
+              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                paymentStatus === "paid"
+                  ? "border-sky-400 bg-sky-50 text-sky-800"
+                  : "border-zinc-300 text-zinc-500 hover:bg-zinc-50"
+              }`}
+            >
+              ✓ Pagado
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentStatus("unpaid")}
+              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                paymentStatus === "unpaid"
+                  ? "border-amber-400 bg-amber-50 text-amber-800"
+                  : "border-zinc-300 text-zinc-500 hover:bg-zinc-50"
+              }`}
+            >
+              Debe
+            </button>
+          </div>
         </div>
         <div>
           <label className={labelClass}>Nombre del equipo</label>

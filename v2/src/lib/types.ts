@@ -49,6 +49,7 @@ export interface Tournament {
 // Inscripciones
 // ---------------------------------------------------------------------------
 
+/** @deprecated Estado combinado del modelo viejo; se conserva para migrar filas existentes. */
 export type RegistrationStatus =
   | "pending_payment"
   | "paid"
@@ -56,6 +57,12 @@ export type RegistrationStatus =
   | "approved"
   | "rejected"
   | "waitlisted";
+
+/** Decisión deportiva: ¿el equipo puede jugar? */
+export type ApprovalStatus = "pending" | "approved" | "rejected" | "waitlisted";
+
+/** Estado del pago, independiente de la aprobación. */
+export type PaymentStatus = "unpaid" | "paid";
 
 export interface Representative {
   name: string;
@@ -93,7 +100,14 @@ export interface Registration {
   comments?: string;
   signatureName: string;
   termsAccepted: boolean;
-  status: RegistrationStatus;
+  /** Decisión deportiva (aprobado para jugar, en revisión, etc.) */
+  approval: ApprovalStatus;
+  /** Estado del pago, separado de la aprobación */
+  paymentStatus: PaymentStatus;
+  /** Cuándo se marcó como pagado */
+  paidAt?: string;
+  /** @deprecated Campo del modelo viejo; las filas nuevas no lo usan. */
+  status?: RegistrationStatus;
   feeCents: number;
   registeredAt: string; // ISO — orden de siembra del bracket
   updatedAt: string;
@@ -253,6 +267,7 @@ export const GENDER_LABELS: Record<Gender, string> = {
   mixto: "Mixto",
 };
 
+/** @deprecated Etiquetas del modelo viejo de estado combinado. */
 export const REGISTRATION_STATUS_LABELS: Record<RegistrationStatus, string> = {
   pending_payment: "Pago pendiente",
   paid: "Pagado",
@@ -262,14 +277,50 @@ export const REGISTRATION_STATUS_LABELS: Record<RegistrationStatus, string> = {
   waitlisted: "Lista de espera",
 };
 
+export const APPROVAL_STATUS_LABELS: Record<ApprovalStatus, string> = {
+  pending: "En revisión",
+  approved: "Aprobado",
+  rejected: "Rechazado",
+  waitlisted: "Lista de espera",
+};
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  unpaid: "Debe",
+  paid: "Pagado",
+};
+
 export const TOURNAMENT_STATUS_LABELS: Record<TournamentStatus, string> = {
   draft: "Borrador",
   open: "Inscripciones abiertas",
   closed: "Cerrado",
 };
 
-/** Estados elegibles para sembrar un bracket */
-export const BRACKET_ELIGIBLE_STATUSES: RegistrationStatus[] = ["paid", "approved"];
+/**
+ * Migra una inscripción del modelo viejo (status combinado) al nuevo
+ * (approval + paymentStatus). Las filas nuevas pasan sin cambios.
+ */
+export function normalizeRegistration(r: Registration): Registration {
+  if (r.approval && r.paymentStatus) return r;
+  const legacy = r.status ?? "pending_payment";
+  const approval: ApprovalStatus =
+    legacy === "approved"
+      ? "approved"
+      : legacy === "rejected"
+        ? "rejected"
+        : legacy === "waitlisted"
+          ? "waitlisted"
+          : "pending";
+  const paymentStatus: PaymentStatus =
+    legacy === "paid" || legacy === "approved" ? "paid" : "unpaid";
+  return { ...r, approval, paymentStatus };
+}
+
+/** Un equipo entra al bracket si está aprobado, o si ya pagó y sigue en revisión. */
+export function isBracketEligible(r: Registration): boolean {
+  return (
+    r.approval === "approved" || (r.approval === "pending" && r.paymentStatus === "paid")
+  );
+}
 
 export function categoryLabel(tournament: Tournament, category: Category): string {
   if (category.customLabel?.trim()) return category.customLabel.trim();
