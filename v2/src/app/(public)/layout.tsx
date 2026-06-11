@@ -71,9 +71,6 @@ export default async function PublicLayout({ children }: { children: React.React
             <span className="font-semibold text-zinc-300">VolleyHub PR</span> — Voleibol juvenil
             de Puerto Rico
           </p>
-          <Link href="/admin" className="text-xs text-zinc-600 transition hover:text-amber-400">
-            Portal de Administrador
-          </Link>
         </div>
       </footer>
     </div>
