@@ -2,16 +2,17 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getClient, getRegistrations, getTournaments } from "@/lib/store";
 import { REGISTRATION_STATUS_LABELS, formatDateRangeEs } from "@/lib/types";
+import { card } from "@/components/admin/ui";
 
 export const dynamic = "force-dynamic";
 
 const STATUS_COLOR: Record<string, string> = {
-  pending_payment: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
-  paid:            "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  under_review:    "bg-purple-500/20 text-purple-300 border-purple-500/30",
-  approved:        "bg-green-500/20 text-green-300 border-green-500/30",
-  rejected:        "bg-red-500/20 text-red-300 border-red-500/30",
-  waitlisted:      "bg-zinc-500/20 text-zinc-300 border-zinc-500/30",
+  pending_payment: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  paid:            "bg-blue-50 text-blue-700 border-blue-200",
+  under_review:    "bg-purple-50 text-purple-700 border-purple-200",
+  approved:        "bg-green-50 text-green-700 border-green-200",
+  rejected:        "bg-red-50 text-red-700 border-red-200",
+  waitlisted:      "bg-zinc-100 text-zinc-600 border-zinc-200",
 };
 
 export default async function ClienteDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -31,19 +32,19 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
   const tournamentMap = new Map(tournaments.map((t) => [t.slug, t]));
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="mb-8">
+    <div className="space-y-6">
+      <div>
         <Link
           href="/admin/clientes"
-          className="text-xs text-zinc-500 hover:text-amber-400 transition mb-4 inline-block"
+          className="mb-3 inline-block text-xs text-zinc-500 transition hover:text-indigo-600"
         >
           ← Clientes
         </Link>
-        <h1 className="text-2xl font-bold text-zinc-100">{client.displayName}</h1>
-        <p className="text-zinc-400 mt-1">{client.email}</p>
+        <h1 className="text-2xl font-semibold text-zinc-900">{client.displayName}</h1>
+        <p className="mt-1 text-sm text-zinc-500">{client.email}</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <InfoCard label="Correo" value={client.email} />
         <InfoCard label="Teléfono" value={client.phone ?? "—"} />
         <InfoCard
@@ -52,48 +53,50 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
         />
       </div>
 
-      <h2 className="text-xl font-bold text-zinc-100 mb-4">
-        Inscripciones <span className="text-zinc-500 font-normal text-base">({myRegs.length})</span>
+      <h2 className="text-lg font-semibold text-zinc-900">
+        Inscripciones <span className="text-sm font-normal text-zinc-400">({myRegs.length})</span>
       </h2>
 
       {myRegs.length === 0 ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-8 py-10 text-center text-zinc-400">
+        <div className={`${card} px-8 py-10 text-center text-sm text-zinc-500`}>
           Este cliente aún no tiene inscripciones.
         </div>
       ) : (
-        <div className="rounded-xl border border-zinc-800 overflow-hidden">
+        <div className={`${card} overflow-hidden`}>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-800 bg-zinc-900">
-                <th className="text-left px-4 py-3 font-semibold text-zinc-300">Equipo</th>
-                <th className="text-left px-4 py-3 font-semibold text-zinc-300">Torneo</th>
-                <th className="text-left px-4 py-3 font-semibold text-zinc-300">Estado</th>
-                <th className="text-left px-4 py-3 font-semibold text-zinc-300">Fecha</th>
+              <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-zinc-500">
+                <th className="px-4 py-3 font-medium">Equipo</th>
+                <th className="px-4 py-3 font-medium">Torneo</th>
+                <th className="px-4 py-3 font-medium">Estado</th>
+                <th className="px-4 py-3 font-medium">Fecha</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800">
+            <tbody className="divide-y divide-zinc-100">
               {myRegs.map((reg) => {
                 const t = tournamentMap.get(reg.tournamentSlug);
                 return (
-                  <tr key={reg.id} className="bg-zinc-950 hover:bg-zinc-900 transition">
+                  <tr key={reg.id} className="text-zinc-800">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-zinc-100">{reg.teamName}</p>
-                      <p className="text-xs text-zinc-500">{reg.clubName}</p>
+                      <p className="font-medium">{reg.teamName}</p>
+                      <p className="text-xs text-zinc-400">{reg.clubName}</p>
                     </td>
-                    <td className="px-4 py-3 text-zinc-300">
+                    <td className="px-4 py-3 text-zinc-600">
                       <p>{t?.name ?? reg.tournamentSlug}</p>
                       {t && (
-                        <p className="text-xs text-zinc-500">{formatDateRangeEs(t.startsOn, t.endsOn)}</p>
+                        <p className="text-xs text-zinc-400">
+                          {formatDateRangeEs(t.startsOn, t.endsOn)}
+                        </p>
                       )}
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_COLOR[reg.status] ?? "bg-zinc-800 text-zinc-300 border-zinc-700"}`}
+                        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_COLOR[reg.status] ?? "bg-zinc-100 text-zinc-600 border-zinc-200"}`}
                       >
                         {REGISTRATION_STATUS_LABELS[reg.status] ?? reg.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-zinc-500 text-xs">
+                    <td className="px-4 py-3 text-xs text-zinc-400">
                       {new Date(reg.registeredAt).toLocaleDateString("es-PR")}
                     </td>
                   </tr>
@@ -109,9 +112,9 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-4">
-      <p className="text-xs text-zinc-500 mb-1">{label}</p>
-      <p className="text-sm font-medium text-zinc-100">{value}</p>
+    <div className={`${card} px-4 py-4`}>
+      <p className="mb-1 text-xs text-zinc-400">{label}</p>
+      <p className="text-sm font-medium text-zinc-900">{value}</p>
     </div>
   );
 }

@@ -243,6 +243,33 @@ export async function getAdmins(): Promise<AdminUser[]> {
   return readCollection("admins");
 }
 
+export async function getAdmin(id: string): Promise<AdminUser | null> {
+  const items = await readCollection("admins");
+  return items.find((a) => a.id === id) ?? null;
+}
+
+export async function getAdminByUsername(username: string): Promise<AdminUser | null> {
+  const u = username.trim().toLowerCase();
+  const items = await readCollection("admins");
+  return items.find((a) => a.username.trim().toLowerCase() === u) ?? null;
+}
+
+export async function saveAdmin(admin: AdminUser): Promise<void> {
+  const items = await readCollection("admins");
+  const idx = items.findIndex((a) => a.id === admin.id);
+  if (idx >= 0) items[idx] = admin;
+  else items.push(admin);
+  await writeCollection("admins", items);
+}
+
+export async function deleteAdmin(id: string): Promise<void> {
+  const items = await readCollection("admins");
+  await writeCollection(
+    "admins",
+    items.filter((a) => a.id !== id),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Clientes (cuentas públicas)
 // ---------------------------------------------------------------------------

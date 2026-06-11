@@ -28,10 +28,12 @@ export default async function AdminLoginPage() {
             <LoginForm />
           </div>
         </div>
-        <p className="mt-4 text-center text-xs text-zinc-500">
-          Demo local: usuario <span className="font-mono text-zinc-300">admin</span> · contraseña{" "}
-          <span className="font-mono text-zinc-300">volley2026</span>
-        </p>
+        {process.env.NODE_ENV !== "production" && (
+          <p className="mt-4 text-center text-xs text-zinc-500">
+            Demo local: usuario <span className="font-mono text-zinc-300">admin</span> · contraseña{" "}
+            <span className="font-mono text-zinc-300">volley2026</span>
+          </p>
+        )}
       </div>
     </main>
   );

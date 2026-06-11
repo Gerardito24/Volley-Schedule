@@ -17,6 +17,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/inscripciones", label: "Inscripciones" },
   { href: "/admin/equipos", label: "Equipos" },
   { href: "/admin/clientes", label: "Clientes" },
+  { href: "/admin/administradores", label: "Administradores" },
 ];
 
 interface AdminSidebarProps {
