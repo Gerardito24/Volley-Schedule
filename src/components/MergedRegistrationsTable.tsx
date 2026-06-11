@@ -20,6 +20,7 @@ export function MergedRegistrationsTable({
   tournament,
   hideTournamentColumn,
   registrationTools = true,
+  statusFilter,
 }: {
   tournamentSlug?: string;
   /** Si se pasa, solo filas de esa categoría (`categoryId` en mock). */
@@ -27,8 +28,9 @@ export function MergedRegistrationsTable({
   /** Torneo mergeado (admin); con `categoryId` permite alinear ids seed vs localStorage. */
   tournament?: TournamentMock;
   hideTournamentColumn?: boolean;
-  /** Hoja de inscripción, PDF por fila, doble clic en celdas (solo admin). */
+  /** Hoja de inscripción, PDF por fila, edición por fila (solo admin). */
   registrationTools?: boolean;
+  statusFilter?: string;
 }) {
   const [revision, setRevision] = useState(0);
 
@@ -66,8 +68,11 @@ export function MergedRegistrationsTable({
         merged = merged.filter((r) => r.categoryId === categoryId);
       }
     }
+    if (statusFilter) {
+      merged = merged.filter((r) => r.status === statusFilter);
+    }
     return merged;
-  }, [tournamentSlug, categoryId, tournament, revision]);
+  }, [tournamentSlug, categoryId, tournament, statusFilter, revision]);
 
   return (
     <RegistrationTable

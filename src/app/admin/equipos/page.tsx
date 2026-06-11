@@ -116,28 +116,45 @@ export default function AdminEquiposPage() {
   }, []);
 
   const clubs = useMemo(() => buildClubSummaries(), [revision]);
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return clubs;
+    return clubs.filter(
+      (c) =>
+        c.clubName.toLowerCase().includes(q) ||
+        c.pueblo.toLowerCase().includes(q) ||
+        c.owner.toLowerCase().includes(q),
+    );
+  }, [clubs, query]);
 
   return (
     <main className="flex flex-1 flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-          Equipos
-        </h1>
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Equipos</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Incluye perfiles registrados desde la web pública (Equipo) aunque aún no haya inscripción a un torneo,
-          más clubes que aparecen por inscripciones y rosters.
+          Clubes registrados desde la web pública o por inscripciones a torneos. Reutiliza datos en futuras inscripciones.
         </p>
       </div>
 
-      {clubs.length === 0 ? (
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Buscar club, pueblo o contacto…"
+        className="max-w-md rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm"
+      />
+
+      {filtered.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-12 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
             Todavía no hay clubes. Pueden crearse desde la página pública{" "}
-            <Link href="/equipo" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+            <Link href="/equipo" className="font-medium text-sky-700 hover:underline dark:text-sky-400">
               Equipo
             </Link>{" "}
             o al inscribirse en un{" "}
-            <Link href="/tournaments" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+            <Link href="/tournaments" className="font-medium text-sky-700 hover:underline dark:text-sky-400">
               torneo
             </Link>
             .
@@ -163,7 +180,7 @@ export default function AdminEquiposPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950">
-              {clubs.map((c) => (
+              {filtered.map((c) => (
                 <tr
                   key={c.clubSlug}
                   onClick={() => router.push(`/admin/equipos/${encodeURIComponent(c.clubSlug)}`)}

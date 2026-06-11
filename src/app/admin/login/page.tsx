@@ -49,7 +49,10 @@ export default function AdminLoginPage() {
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-12">
       <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
-        <h1 className="text-xl font-bold text-zinc-900">Acceso administración</h1>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-sky-600/90">
+          Portal de Administrador
+        </p>
+        <h1 className="mt-3 text-xl font-bold text-zinc-900">Iniciar sesión</h1>
         <p className="mt-2 text-sm text-zinc-600">Ingresa con tu usuario y contraseña de operador.</p>
 
         <form onSubmit={submit} className="mt-6 space-y-4">

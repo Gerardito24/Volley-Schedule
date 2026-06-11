@@ -23,6 +23,19 @@ const statusLabels: Record<RegistrationRowMock["status"], string> = {
   waitlisted: "Lista de espera",
 };
 
+const statusTone: Record<
+  RegistrationRowMock["status"],
+  "neutral" | "sky" | "emerald" | "amber" | "red"
+> = {
+  draft: "neutral",
+  pending_payment: "amber",
+  paid: "sky",
+  under_review: "sky",
+  approved: "emerald",
+  rejected: "red",
+  waitlisted: "neutral",
+};
+
 type EditableField =
   | "tournamentName"
   | "divisionLabel"
@@ -165,11 +178,7 @@ export function RegistrationTable({
       return (
         <td
           className={`${className} ${tools ? "cursor-cell" : ""}`}
-          title={
-            tools
-              ? "Doble clic para editar"
-              : undefined
-          }
+          title={tools ? "Clic en editar o doble clic en la celda" : undefined}
           onClick={tools ? (e) => e.stopPropagation() : undefined}
           onDoubleClick={(e) => {
             e.preventDefault();
@@ -188,7 +197,7 @@ export function RegistrationTable({
                 if (e.key === "Enter") commitEdit();
                 if (e.key === "Escape") cancelEdit();
               }}
-              className={`w-full min-w-[8rem] rounded border border-emerald-500 bg-white px-2 py-1 text-sm dark:bg-zinc-950 ${
+              className={`w-full min-w-[8rem] rounded border border-sky-500 bg-white px-2 py-1 text-sm dark:bg-zinc-950 ${
                 field === "feeCents" ? "text-right" : ""
               }`}
             />
@@ -204,18 +213,14 @@ export function RegistrationTable({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          Demo: datos seed + inscripciones guardadas en este navegador. Conectar
-          Supabase en una siguiente iteración.
-          {tools ? (
-            <>
-              {" "}
-              <strong>Clic</strong> en la fila o en el club para el detalle (con
-              roster). <strong>Doble clic</strong> en torneo/división/equipo/tarifa/fecha
-              para editar. <strong>PDF</strong> descarga la hoja.
-            </>
-          ) : null}
-        </p>
+        {tools ? (
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Clic en la fila para ver el detalle. Usa <strong>Editar</strong> o doble clic en celdas
+            resaltadas.
+          </p>
+        ) : (
+          <span />
+        )}
         <a
           href={csvBlobUrl}
           download="registrations-export.csv"
@@ -300,13 +305,23 @@ export function RegistrationTable({
                     className="whitespace-nowrap px-4 py-3"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <button
-                      type="button"
-                      onClick={() => downloadRegistrationPdf(r)}
-                      className="rounded-lg border border-emerald-600/40 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-900 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-100 dark:hover:bg-emerald-900/40"
-                    >
-                      PDF
-                    </button>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => beginEdit(r, "teamName")}
+                        className="rounded-lg border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                        title="Editar equipo"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadRegistrationPdf(r)}
+                        className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-900 hover:bg-sky-100"
+                      >
+                        PDF
+                      </button>
+                    </div>
                   </td>
                 ) : null}
                 {!hideTournamentColumn
@@ -332,8 +347,22 @@ export function RegistrationTable({
                   r.teamName,
                   "whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300",
                 )}
-                <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">
-                  {statusLabels[r.status]}
+                <td className="whitespace-nowrap px-4 py-3">
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      statusTone[r.status] === "emerald"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : statusTone[r.status] === "amber"
+                          ? "bg-amber-100 text-amber-900"
+                          : statusTone[r.status] === "red"
+                            ? "bg-red-100 text-red-800"
+                            : statusTone[r.status] === "sky"
+                              ? "bg-sky-100 text-sky-800"
+                              : "bg-zinc-100 text-zinc-700"
+                    }`}
+                  >
+                    {statusLabels[r.status]}
+                  </span>
                 </td>
                 {allowLocalStatusEdit ? (
                   <td

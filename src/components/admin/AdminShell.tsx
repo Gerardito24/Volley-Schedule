@@ -1,14 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminTopBar } from "@/components/admin/AdminTopBar";
 import { hasItMasterProfile, readSession } from "@/lib/admin-operators-store";
 
+type AuthSnapshot = {
+  envDbConfigured: boolean;
+  needsSetup: boolean;
+  loggedIn: boolean;
+  loadError: string | null;
+};
+
+const PUBLIC_SHELL_PATHS = new Set(["/admin/setup", "/admin/login"]);
+const BYPASS_PATHS = new Set(["/admin/db-migration"]);
+
 export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
   const router = useRouter();
+  const authSnapshotRef = useRef<AuthSnapshot | null>(null);
+  const initialCheckDone = useRef(false);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -20,26 +32,26 @@ export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const path = pathname;
-
-    if (path === "/admin/db-migration") {
+    if (BYPASS_PATHS.has(pathname)) {
       setReady(true);
       return;
     }
 
     let cancelled = false;
 
-    async function runRemoteDbFlow() {
+    async function runRemoteDbFlow(): Promise<AuthSnapshot> {
       const dbRes = await fetch("/api/admin/db", { cache: "no-store" });
       if (!dbRes.ok) {
         const errJson = (await dbRes.json().catch(() => ({}))) as { message?: string };
-        setLoadError(
-          typeof errJson.message === "string"
-            ? errJson.message
-            : "No se pudo conectar a la base de datos. Revisa DATABASE_URL en Vercel (proyecto admin) y ejecuta npm run db:migrate contra Railway.",
-        );
-        setReady(true);
-        return;
+        return {
+          envDbConfigured: true,
+          needsSetup: false,
+          loggedIn: false,
+          loadError:
+            typeof errJson.message === "string"
+              ? errJson.message
+              : "No se pudo conectar a la base de datos. Contacta al administrador del sistema.",
+        };
       }
 
       const dbJson = (await dbRes.json().catch(() => ({}))) as {
@@ -48,9 +60,71 @@ export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>
       };
       const needsSetup = Boolean(dbJson.needsSetup);
 
-      if (cancelled) return;
-
       if (needsSetup) {
+        return { envDbConfigured: true, needsSetup: true, loggedIn: false, loadError: null };
+      }
+
+      const meRes = await fetch("/api/admin/auth/me", {
+        cache: "no-store",
+        credentials: "include",
+      });
+      const me = (await meRes.json().catch(() => ({}))) as {
+        operator?: { id: string } | null;
+        message?: string;
+      };
+
+      if (!meRes.ok) {
+        const message =
+          typeof me.message === "string"
+            ? me.message
+            : "Error de sesión del servidor. Revisa la configuración del portal.";
+        return { envDbConfigured: true, needsSetup: false, loggedIn: false, loadError: message };
+      }
+
+      return {
+        envDbConfigured: true,
+        needsSetup: false,
+        loggedIn: Boolean(me?.operator),
+        loadError: null,
+      };
+    }
+
+    async function runLocalFlow(): Promise<AuthSnapshot> {
+      const hasMaster = hasItMasterProfile();
+      if (!hasMaster) {
+        return { envDbConfigured: false, needsSetup: true, loggedIn: false, loadError: null };
+      }
+      const session = readSession();
+      return {
+        envDbConfigured: false,
+        needsSetup: false,
+        loggedIn: Boolean(session),
+        loadError: null,
+      };
+    }
+
+    async function evaluateAuth(): Promise<AuthSnapshot> {
+      const statusRes = await fetch("/api/public/db-status", { cache: "no-store" });
+      const statusJson = (await statusRes.json().catch(() => ({}))) as { configured?: boolean };
+      const envDbConfigured = statusRes.ok && Boolean(statusJson.configured);
+      if (envDbConfigured) return runRemoteDbFlow();
+      return runLocalFlow();
+    }
+
+    function applySnapshot(snapshot: AuthSnapshot, path: string) {
+      authSnapshotRef.current = snapshot;
+      setLoadError(snapshot.loadError);
+
+      if (snapshot.loadError) {
+        if (PUBLIC_SHELL_PATHS.has(path)) {
+          setReady(true);
+          return;
+        }
+        setReady(true);
+        return;
+      }
+
+      if (snapshot.needsSetup) {
         if (path !== "/admin/setup" && path !== "/admin/db-migration") {
           router.replace("/admin/setup");
           return;
@@ -64,110 +138,68 @@ export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>
         return;
       }
 
-      const meRes = await fetch("/api/admin/auth/me", {
-        cache: "no-store",
-        credentials: "include",
+      if (!snapshot.loggedIn) {
+        if (path !== "/admin/login") {
+          router.replace("/admin/login");
+          return;
+        }
+        setReady(true);
+        return;
+      }
+
+      if (path === "/admin/login") {
+        router.replace("/admin");
+        return;
+      }
+
+      setReady(true);
+    }
+
+    const cached = authSnapshotRef.current;
+    const canUseCache =
+      initialCheckDone.current &&
+      cached &&
+      !cached.loadError &&
+      !cached.needsSetup &&
+      cached.loggedIn &&
+      !PUBLIC_SHELL_PATHS.has(pathname);
+
+    if (canUseCache) {
+      setReady(true);
+      void evaluateAuth().then((snapshot) => {
+        if (cancelled) return;
+        if (
+          snapshot.loadError ||
+          snapshot.needsSetup ||
+          !snapshot.loggedIn
+        ) {
+          authSnapshotRef.current = snapshot;
+          applySnapshot(snapshot, pathname);
+        } else {
+          authSnapshotRef.current = snapshot;
+        }
       });
-      const me = (await meRes.json().catch(() => ({}))) as {
-        operator?: { id: string } | null;
-        message?: string;
+      return () => {
+        cancelled = true;
       };
+    }
 
+    if (!initialCheckDone.current) {
+      setReady(false);
+    }
+
+    void evaluateAuth().then((snapshot) => {
       if (cancelled) return;
-
-      if (!meRes.ok) {
-        const message =
-          typeof me.message === "string"
-            ? me.message
-            : "Error de sesión del servidor. Revisa ADMIN_SESSION_SECRET en Vercel (proyecto admin).";
-        if (path === "/admin/login" || path === "/admin/setup") {
-          setLoadError(message);
-          setReady(true);
-          return;
-        }
-        router.replace("/admin/login");
-        return;
-      }
-
-      const loggedIn = Boolean(me?.operator);
-
-      if (!loggedIn) {
-        if (path !== "/admin/login") {
-          router.replace("/admin/login");
-          return;
-        }
-        setReady(true);
-        return;
-      }
-
-      if (path === "/admin/login") {
-        router.replace("/admin");
-        return;
-      }
-
-      setReady(true);
-    }
-
-    async function runLocalFlow() {
-      const hasMaster = hasItMasterProfile();
-      if (!hasMaster) {
-        if (path !== "/admin/setup") {
-          router.replace("/admin/setup");
-          return;
-        }
-        setReady(true);
-        return;
-      }
-
-      if (path === "/admin/setup") {
-        router.replace("/admin/login");
-        return;
-      }
-
-      const session = readSession();
-      if (!session) {
-        if (path !== "/admin/login") {
-          router.replace("/admin/login");
-          return;
-        }
-        setReady(true);
-        return;
-      }
-
-      if (path === "/admin/login") {
-        router.replace("/admin");
-        return;
-      }
-
-      setReady(true);
-    }
-
-    async function run() {
-      setLoadError(null);
-
-      const statusRes = await fetch("/api/public/db-status", { cache: "no-store" });
-      const statusJson = (await statusRes.json().catch(() => ({}))) as { configured?: boolean };
-      const envDbConfigured = statusRes.ok && Boolean(statusJson.configured);
-
-      if (cancelled) return;
-
-      if (envDbConfigured) {
-        await runRemoteDbFlow();
-        return;
-      }
-
-      await runLocalFlow();
-    }
-
-    setReady(false);
-    void run();
+      initialCheckDone.current = true;
+      applySnapshot(snapshot, pathname);
+    });
 
     return () => {
       cancelled = true;
     };
   }, [pathname, router]);
 
-  const isPublicShell = pathname === "/admin/setup" || pathname === "/admin/login";
+  const isPublicShell = PUBLIC_SHELL_PATHS.has(pathname);
 
   if (!ready) {
     return (
@@ -186,7 +218,7 @@ export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="mt-4 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
+            className="mt-4 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
           >
             Reintentar
           </button>

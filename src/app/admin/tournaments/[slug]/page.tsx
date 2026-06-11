@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { MergedRegistrationsTable } from "@/components/MergedRegistrationsTable";
+import { Button } from "@/components/admin/ui";
 import { computeMergedTournaments } from "@/hooks/use-merged-tournaments";
 import {
   readStoredTournaments,
@@ -35,6 +36,30 @@ const statusLabel: Record<TournamentMock["status"], string> = {
   closed: "Cerrado",
   draft: "Borrador",
 };
+
+type TabId = "resumen" | "config" | "categorias" | "inscripciones" | "itinerario";
+
+const TOURNAMENT_TABS: { id: TabId; label: string }[] = [
+  { id: "resumen", label: "Resumen" },
+  { id: "config", label: "Configuración" },
+  { id: "categorias", label: "Categorías" },
+  { id: "inscripciones", label: "Inscripciones" },
+  { id: "itinerario", label: "Itinerario" },
+];
+
+const VALID_TABS = new Set<TabId>(TOURNAMENT_TABS.map((t) => t.id));
+
+function IconPencil({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"
+      />
+    </svg>
+  );
+}
 
 function formatMoney(cents: number) {
   return new Intl.NumberFormat("es-PR", {
@@ -130,6 +155,9 @@ function AdminTournamentDetailInner() {
         : "";
 
   const selectedCategoryId = searchParams.get("category");
+  const tabParam = searchParams.get("tab");
+  const activeTab: TabId =
+    tabParam && VALID_TABS.has(tabParam as TabId) ? (tabParam as TabId) : "resumen";
 
   const [merged, setMerged] = useState<TournamentMock[]>(() =>
     mergeAdminTournaments(seedTournaments, readStoredTournaments()),
@@ -231,6 +259,16 @@ function AdminTournamentDetailInner() {
       const p = new URLSearchParams(searchParams.toString());
       if (categoryId) p.set("category", categoryId);
       else p.delete("category");
+      const qs = p.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  const setTab = useCallback(
+    (tab: TabId) => {
+      const p = new URLSearchParams(searchParams.toString());
+      p.set("tab", tab);
       const qs = p.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
@@ -423,7 +461,7 @@ function AdminTournamentDetailInner() {
         </p>
         <Link
           href="/admin/tournaments"
-          className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+          className="text-sm font-medium text-sky-700 hover:underline dark:text-sky-400"
         >
           ← Volver a torneos
         </Link>
@@ -439,12 +477,11 @@ function AdminTournamentDetailInner() {
         </h2>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           No hay torneo con slug{" "}
-          <code className="rounded bg-zinc-200 px-1 dark:bg-zinc-800">{slug}</code>
-          . Puede haberse borrado el almacenamiento local del navegador.
+          <code className="rounded bg-zinc-200 px-1 dark:bg-zinc-800">{slug}</code>.
         </p>
         <Link
           href="/admin/tournaments"
-          className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+          className="text-sm font-medium text-sky-700 hover:underline dark:text-sky-400"
         >
           ← Volver a torneos
         </Link>
@@ -457,7 +494,7 @@ function AdminTournamentDetailInner() {
       <main className="flex flex-1 flex-col gap-4">
         <Link
           href="/admin/tournaments"
-          className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+          className="text-sm font-medium text-sky-700 hover:underline dark:text-sky-400"
         >
           ← Torneos
         </Link>
@@ -467,7 +504,7 @@ function AdminTournamentDetailInner() {
         <button
           type="button"
           onClick={() => setCategoryQuery(null)}
-          className="w-fit text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+          className="w-fit text-sm font-medium text-sky-700 hover:underline dark:text-sky-400"
         >
           Volver al torneo
         </button>
@@ -482,7 +519,7 @@ function AdminTournamentDetailInner() {
           <button
             type="button"
             onClick={() => setCategoryQuery(null)}
-            className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            className="text-sm font-medium text-sky-700 hover:underline dark:text-sky-400"
           >
             ← Volver al torneo
           </button>
@@ -536,27 +573,32 @@ function AdminTournamentDetailInner() {
                 className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-lg font-semibold text-zinc-900 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
               />
             ) : (
-              <button
-                type="button"
-                title="Doble clic para editar el nombre (no cambia edad, división ni género)"
-                onDoubleClick={() => {
-                  setCategoryTitleDraft(
-                    displayCategoryName(selectedCategory, tournament.divisions),
-                  );
-                  setEditingCategoryTitle(true);
-                }}
-                className="mt-1 block w-full truncate text-left text-lg font-semibold text-zinc-900 dark:text-zinc-50"
-              >
-                {displayCategoryName(selectedCategory, tournament.divisions)}
-              </button>
+              <div className="mt-1 flex items-center gap-2">
+                <span className="truncate text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                  {displayCategoryName(selectedCategory, tournament.divisions)}
+                </span>
+                <button
+                  type="button"
+                  title="Editar nombre de la categoría"
+                  onClick={() => {
+                    setCategoryTitleDraft(
+                      displayCategoryName(selectedCategory, tournament.divisions),
+                    );
+                    setEditingCategoryTitle(true);
+                  }}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:text-sky-700 dark:border-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-sky-400"
+                >
+                  <IconPencil className="h-4 w-4" />
+                  <span className="sr-only">Editar nombre</span>
+                </button>
+              </div>
             )}
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Nombre = edad + división + género. Doble clic para un título distinto. Guardá abajo.
+              Nombre = edad + división + género. Usá el lápiz para un título distinto. Guardá abajo.
             </p>
           </div>
           <p className="mb-6 text-xs text-zinc-500">
-            Edad, división del torneo, género, tarifa y cupo. Los cambios se guardan en este navegador
-            (localStorage).
+            Edad, división del torneo, género, tarifa y cupo.
           </p>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <label className="block text-sm">
@@ -681,15 +723,11 @@ function AdminTournamentDetailInner() {
             </label>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={handleSaveCategory}
-              className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-            >
+            <Button type="button" onClick={handleSaveCategory}>
               Guardar categoría
-            </button>
+            </Button>
             {categorySaved ? (
-              <span className="text-sm text-emerald-600 dark:text-emerald-400">
+              <span className="text-sm text-sky-600 dark:text-sky-400">
                 Guardado.
               </span>
             ) : null}
@@ -718,25 +756,47 @@ function AdminTournamentDetailInner() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 pb-10 sm:px-6 lg:px-8">
-        <Link
-          href="/admin/tournaments"
-          className="text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"
-        >
-          ← Torneos
-        </Link>
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 pb-10 sm:px-6 lg:px-8">
+      <Link
+        href="/admin/tournaments"
+        className="text-sm font-medium text-sky-700 hover:underline dark:text-sky-400"
+      >
+        ← Torneos
+      </Link>
 
-        <div className="mt-4 rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm ring-1 ring-zinc-950/5 dark:border-zinc-800 dark:bg-zinc-900 dark:ring-white/5 sm:p-6">
+      <nav aria-label="Secciones del torneo" className="flex flex-wrap gap-1 border-b border-zinc-200 dark:border-zinc-800">
+        {TOURNAMENT_TABS.map((t) => {
+          const selected = activeTab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`relative -mb-px rounded-t-lg px-4 py-2.5 text-sm font-medium transition ${
+                selected
+                  ? "border border-b-white border-zinc-200 bg-white text-sky-700 dark:border-zinc-700 dark:border-b-zinc-900 dark:bg-zinc-900 dark:text-sky-400"
+                  : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-200"
+              }`}
+              aria-current={selected ? "page" : undefined}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {activeTab === "resumen" ? (
+        <div className="rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-sm ring-1 ring-zinc-950/5 dark:border-zinc-800 dark:bg-zinc-900 dark:ring-white/5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
+              <h2 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
                 {tournament.name}
-              </h1>
+              </h2>
               <p className="mt-1 truncate font-mono text-xs text-zinc-500" title={tournament.slug}>
                 {tournament.slug}
               </p>
             </div>
-            <span className="shrink-0 rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200">
+            <span className="shrink-0 rounded-full bg-sky-50 px-3 py-1 text-sm font-medium text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
               {statusLabel[tournament.status]}
             </span>
           </div>
@@ -750,11 +810,6 @@ function AdminTournamentDetailInner() {
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             Cierre de inscripciones: {tournament.registrationDeadlineOn}
           </p>
-          {tournament.description?.trim() ? (
-            <p className="mt-4 line-clamp-3 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
-              {tournament.description}
-            </p>
-          ) : null}
           {tournamentStats ? (
             <div className="mt-5 grid grid-cols-3 gap-2">
               {[
@@ -776,45 +831,17 @@ function AdminTournamentDetailInner() {
               ))}
             </div>
           ) : null}
-          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 border-t border-zinc-100 pt-4 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
-            <span>
-              Tarifa base:{" "}
-              {tournament.registrationFeeCents != null
-                ? formatMoney(tournament.registrationFeeCents)
-                : "—"}
-            </span>
-            <span>
-              Entrada público:{" "}
-              {tournament.publicEntryFeeCents != null
-                ? formatMoney(tournament.publicEntryFeeCents)
-                : "—"}
-            </span>
-          </div>
-          {tournament.promoImageDataUrl ? (
-            <div className="mt-4 flex justify-center border-t border-zinc-100 pt-4 dark:border-zinc-800 sm:justify-start">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={tournament.promoImageDataUrl}
-                alt=""
-                className="max-h-36 rounded-lg border border-zinc-200 object-contain dark:border-zinc-700"
-              />
-            </div>
-          ) : null}
         </div>
+      ) : null}
 
-        {generalDraft ? (
-          <details className="group rounded-2xl border border-zinc-200 bg-white open:shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-zinc-900 dark:text-zinc-50 [&::-webkit-details-marker]:hidden">
-              <span className="font-semibold">Editar configuración del torneo</span>
-              <span className="shrink-0 text-xs font-normal text-zinc-500">
-                <span className="group-open:hidden">Mostrar</span>
-                <span className="hidden group-open:inline">Ocultar</span>
-              </span>
-            </summary>
-            <div className="border-t border-zinc-100 px-5 pb-5 pt-4 dark:border-zinc-800">
-            <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
-              Nombre, fechas, sedes, divisiones y tarifas. Los cambios se guardan en este navegador.
-            </p>
+      {activeTab === "config" && generalDraft ? (
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+          <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            Configuración del torneo
+          </h3>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            Nombre, fechas, sedes, divisiones y tarifas.
+          </p>
             <div className="flex flex-wrap items-center justify-end gap-4">
               <label className="text-sm">
                 <span className="mr-2 font-medium text-zinc-600 dark:text-zinc-400">
@@ -1119,36 +1146,33 @@ function AdminTournamentDetailInner() {
                 {generalError}
               </p>
             ) : null}
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={handleSaveGeneral}
-                className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-              >
-                Guardar datos del torneo
-              </button>
-              {generalSaved ? (
-                <span className="text-sm text-emerald-600 dark:text-emerald-400">
-                  Guardado.
-                </span>
-              ) : null}
-            </div>
-            </div>
-          </details>
-        ) : null}
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <Button type="button" onClick={handleSaveGeneral}>
+              Guardar datos del torneo
+            </Button>
+            {generalSaved ? (
+              <span className="text-sm text-sky-600 dark:text-sky-400">
+                Guardado.
+              </span>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
+      {activeTab === "categorias" ? (
       <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
             Categorías
           </h3>
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            className="border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200 dark:hover:bg-sky-900/60"
             onClick={handleAddCategory}
-            className="rounded-full border border-emerald-600 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-200 dark:hover:bg-emerald-900/60"
           >
             + Añadir categoría
-          </button>
+          </Button>
         </div>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Elegí una categoría para ver inscripciones y editarla.
@@ -1209,7 +1233,9 @@ function AdminTournamentDetailInner() {
           })}
         </ul>
       </section>
+      ) : null}
 
+      {activeTab === "itinerario" ? (
       <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -1221,11 +1247,8 @@ function AdminTournamentDetailInner() {
               ocupadas y manejar el bracket visualmente.
             </p>
           </div>
-          <Link
-            href={`/admin/tournaments/${encodeURIComponent(slug)}/schedule`}
-            className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-          >
-            Abrir creador de itinerario
+          <Link href={`/admin/tournaments/${encodeURIComponent(slug)}/schedule`}>
+            <Button>Abrir creador de itinerario</Button>
           </Link>
         </div>
         <dl className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -1249,13 +1272,15 @@ function AdminTournamentDetailInner() {
           </div>
         </dl>
       </section>
+      ) : null}
 
+      {activeTab === "inscripciones" ? (
       <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
         <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
           Inscripciones
         </h3>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Todas las categorías (mock + este navegador).
+          Todas las categorías de este torneo.
         </p>
         <div className="mt-6">
           <MergedRegistrationsTable
@@ -1264,6 +1289,7 @@ function AdminTournamentDetailInner() {
           />
         </div>
       </section>
+      ) : null}
     </main>
   );
 }

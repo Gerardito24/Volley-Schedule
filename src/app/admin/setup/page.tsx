@@ -128,12 +128,15 @@ export default function AdminSetupPage() {
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-12">
       <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
-        <h1 className="text-xl font-bold text-zinc-900">Configuración inicial</h1>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-sky-600/90">
+          Portal de Administrador
+        </p>
+        <h1 className="mt-3 text-xl font-bold text-zinc-900">Configuración inicial</h1>
         <p className="mt-2 text-sm text-zinc-600">
-          Crea el perfil IT maestro. Sin este perfil el panel de administración no está disponible.
+          Crea el perfil IT maestro. Sin este perfil el portal no estará disponible.
           {useRemote ? (
-            <span className="mt-1 block text-xs text-emerald-700">
-              Modo servidor: el perfil se guardará en la base de datos compartida.
+            <span className="mt-1 block text-xs text-sky-700">
+              Los datos se guardarán en la base de datos compartida.
             </span>
           ) : null}
         </p>

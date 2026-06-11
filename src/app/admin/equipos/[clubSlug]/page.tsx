@@ -220,6 +220,11 @@ function ClubDetailInner() {
     window.setTimeout(() => setContactSaved(false), 1800);
   }, [rosters, contactDrafts]);
 
+  const handleSaveAll = useCallback(() => {
+    handleSaveProfile();
+    handleSaveContacts();
+  }, [handleSaveProfile, handleSaveContacts]);
+
   // ── not found ─────────────────────────────────────────────────────────────
 
   if (rosters.length === 0 && !getMergedClubProfile(clubSlug)) {
@@ -330,15 +335,8 @@ function ClubDetailInner() {
             </div>
 
             <div className="flex items-center gap-3 border-t border-zinc-100 px-6 py-4 dark:border-zinc-800">
-              <button
-                type="button"
-                onClick={handleSaveProfile}
-                className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-              >
-                Guardar datos del club
-              </button>
-              {profileSaved ? (
-                <span className="text-sm text-emerald-600 dark:text-emerald-400">Guardado.</span>
+              {(profileSaved || contactSaved) ? (
+                <span className="text-sm text-sky-600 dark:text-sky-400">Guardado.</span>
               ) : null}
             </div>
           </>
@@ -432,13 +430,13 @@ function ClubDetailInner() {
         <div className="mt-3 flex items-center gap-3">
           <button
             type="button"
-            onClick={handleSaveContacts}
-            className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+            onClick={handleSaveAll}
+            className="rounded-lg bg-sky-600 px-5 py-2 text-sm font-semibold text-white hover:bg-sky-700"
           >
-            Guardar contactos
+            Guardar cambios del club
           </button>
-          {contactSaved ? (
-            <span className="text-sm text-emerald-600 dark:text-emerald-400">Guardado.</span>
+          {(profileSaved || contactSaved) ? (
+            <span className="text-sm text-sky-600 dark:text-sky-400">Guardado.</span>
           ) : null}
         </div>
         </>

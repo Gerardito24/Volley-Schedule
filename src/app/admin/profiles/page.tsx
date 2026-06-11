@@ -17,6 +17,7 @@ import {
   updateOperator,
 } from "@/lib/admin-operators-store";
 import { fetchAdminJson, isRemoteDbEnabled } from "@/lib/remote-data";
+import { ConfirmDialog } from "@/components/admin/ui";
 
 type MeOperator = {
   id: string;
@@ -102,6 +103,7 @@ export default function AdminProfilesPage() {
   const [cPass, setCPass] = useState("");
 
   const [editId, setEditId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<AdminOperatorPublic | null>(null);
   const [eName, setEName] = useState("");
   const [ePos, setEPos] = useState("");
   const [eUser, setEUser] = useState("");
@@ -209,13 +211,15 @@ export default function AdminProfilesPage() {
   }
 
   async function confirmDelete(p: AdminOperatorPublic) {
+    setPendingDelete(p);
+  }
+
+  async function executeDelete() {
+    const p = pendingDelete;
+    if (!p) return;
+    setPendingDelete(null);
     const a = actor;
     if (!a) return;
-    const msg =
-      p.role === "it_master"
-        ? "¿Eliminar el perfil IT maestro? El administrador quedará bloqueado hasta volver a configurar."
-        : `¿Eliminar el perfil de ${p.displayName}?`;
-    if (!window.confirm(msg)) return;
 
     if (useRemote) {
       try {
@@ -268,8 +272,8 @@ export default function AdminProfilesPage() {
           El perfil IT maestro tiene control total. Los administradores gestionan el día a día; no pueden
           modificar ni eliminar el IT maestro.
           {useRemote ? (
-            <span className="mt-1 block text-xs text-emerald-700">
-              Modo servidor: los cambios se guardan en la base de datos (Postgres).
+            <span className="mt-1 block text-xs text-sky-700">
+              Los cambios se guardan en la base de datos compartida.
             </span>
           ) : null}
         </p>
@@ -510,6 +514,21 @@ export default function AdminProfilesPage() {
           </form>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={pendingDelete != null}
+        title="Eliminar perfil"
+        message={
+          pendingDelete?.role === "it_master"
+            ? "¿Eliminar el perfil IT maestro? El portal quedará bloqueado hasta volver a configurar."
+            : pendingDelete
+              ? `¿Eliminar el perfil de ${pendingDelete.displayName}?`
+              : ""
+        }
+        confirmLabel="Eliminar"
+        danger
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => void executeDelete()}
+      />
     </div>
   );
 }

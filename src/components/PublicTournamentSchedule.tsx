@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { EmptyState } from "@/components/admin/ui/EmptyState";
 import { computeMergedTournaments } from "@/hooks/use-merged-tournaments";
 import { VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED } from "@/lib/local-tournaments";
 import type { TournamentMock } from "@/lib/mock-data";
@@ -8,6 +9,20 @@ import type { CategoryScheduleMock } from "@/lib/schedule-types";
 import { resolveSideToTeamLabel } from "@/lib/schedule-results";
 
 type Props = { slug: string };
+
+function ScheduleSkeleton() {
+  return (
+    <div className="animate-pulse space-y-4 px-4 py-5">
+      <div className="h-5 w-40 rounded bg-zinc-200 dark:bg-zinc-800" />
+      <div className="h-3 w-64 rounded bg-zinc-100 dark:bg-zinc-800/80" />
+      <div className="mt-4 space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800/60" />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function categoryScheduleRows(cs: CategoryScheduleMock) {
   const rows: {
@@ -50,11 +65,13 @@ export function PublicTournamentSchedule({ slug }: Props) {
   const [tournament, setTournament] = useState<TournamentMock | undefined>(
     undefined,
   );
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     async function load() {
       const merged = await computeMergedTournaments();
       setTournament(merged.find((t) => t.slug === slug));
+      setLoaded(true);
     }
     void load();
     const onStored = () => {
@@ -77,8 +94,30 @@ export function PublicTournamentSchedule({ slug }: Props) {
     });
   }, [schedule, tournament?.categories]);
 
-  if (!schedule?.published || categoriesWithRows.length === 0) {
-    return null;
+  if (!loaded) {
+    return (
+      <section className="rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <ScheduleSkeleton />
+      </section>
+    );
+  }
+
+  if (!schedule?.published) {
+    return (
+      <EmptyState
+        title="Itinerario no publicado"
+        description="El organizador aún no ha publicado el itinerario de partidos para este torneo. Vuelve más tarde o contacta al organizador."
+      />
+    );
+  }
+
+  if (categoriesWithRows.length === 0) {
+    return (
+      <EmptyState
+        title="Itinerario sin partidos"
+        description="El itinerario está publicado pero aún no hay partidos configurados."
+      />
+    );
   }
 
   return (

@@ -80,7 +80,17 @@ Flujo crítico de negocio: al inscribirse, conviene **reutilizar roster/datos de
 2. Portal de Administrador — home, torneos, inscripciones, equipos, perfiles (según descripción detallada del usuario).
 3. Website público — torneos, inscripción, reutilización de roster (segunda fase).
 
-**Estado:** contexto documentado; **plan de implementación pendiente** hasta próxima sesión.
+## UX redesign (jun 2026) — implementado
+
+Plan *Rediseño Portal y Web* aplicado en código:
+
+- **Portal de Administrador:** branding, design system (`src/components/admin/ui/`), sidebar por secciones (Operación / Administración), top bar con breadcrumbs, auth cache sin flash entre rutas, dashboard con métricas.
+- **Torneos admin:** wizard 4 pasos al crear, tabs en detalle (`?tab=`), búsqueda/filtros en lista, botón lápiz en categorías.
+- **Inscripciones:** filtros por torneo/estado, chips de estado, botón Editar visible.
+- **Equipos:** búsqueda, guardado unificado en detalle de club.
+- **Web público:** `/tournaments` usa datos merged, inscripción por pasos, reutilizar datos como primer paso, borrador automático, skeletons/empty states en itinerarios.
+
+Verificación: `npm run build` + `npm test` (74 tests).
 
 ## Itinerario admin — workspace “solo bracket” (referencia)
 
@@ -125,7 +135,7 @@ $env:NEXT_PUBLIC_APP_SURFACE="admin"; npm run dev -- -p 3001
 1. ~~Crear **dos proyectos Vercel**~~ — hecho (`volley-schedule-admin` + público).
 2. ~~Migraciones Railway~~ — hecho (`npm run db:migrate` contra Postgres Railway).
 3. Completar **setup IT maestro** en `/admin/setup` si aún no hay operadores en DB.
-4. **Mejora UX Portal de Administrador** — ver sección *Producto — visión y contexto*; funciones iguales, UI/flujo mejorado.
+4. ~~**Mejora UX Portal de Administrador**~~ — implementado (jun 2026); ver sección *UX redesign*.
 5. Rotar contraseña Postgres si se expuso en chat; actualizar `DATABASE_URL` en ambos Vercel.
 6. Opcional: PWA, rate limit en `/api/club-registration/send-pdf`.
 

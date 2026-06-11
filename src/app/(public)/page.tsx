@@ -189,6 +189,19 @@ export default function PublicHomePage() {
 
   return (
     <main className="flex w-full flex-1 flex-col gap-10 py-10">
+      {/* Hero */}
+      <header className="space-y-2 text-center sm:text-left">
+        <p className="text-xs font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+          Torneos de voleibol
+        </p>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
+          Inscripciones e itinerarios
+        </h1>
+        <p className="max-w-xl text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+          Consulta fechas, categorías y horarios. Inscribe tu equipo cuando las inscripciones estén abiertas.
+        </p>
+      </header>
+
       {/* Active tournament banner — only shown when there is a live tournament with published schedule */}
       {featured ? (
         <div className="space-y-2">
@@ -210,10 +223,15 @@ export default function PublicHomePage() {
       {/* Tournament cards grid */}
       {cards.length > 0 ? (
         <section className="space-y-5">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-              Torneos
-            </h2>
+          <div className="flex items-baseline justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                Próximos torneos
+              </h2>
+              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                Ordenados por fecha · inscripciones abiertas primero
+              </p>
+            </div>
             <Link
               href="/tournaments"
               className="inline-flex min-h-[44px] items-center rounded-lg px-2 text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-400"

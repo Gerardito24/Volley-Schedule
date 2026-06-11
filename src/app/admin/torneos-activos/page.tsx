@@ -10,8 +10,8 @@ import {
 import { isInActiveTournamentWindow } from "@/lib/active-tournaments-window";
 import { computeMergedTournaments } from "@/hooks/use-merged-tournaments";
 import { VOLLEYSCHEDULE_TOURNAMENTS_STORED_CHANGED } from "@/lib/local-tournaments";
-import { formatTournamentLocationsLine, CLUB_REGISTRY_SLUG } from "@/lib/mock-data";
-import type { TournamentMock } from "@/lib/mock-data";
+import { formatTournamentLocationsLine, CLUB_REGISTRY_SLUG, type TournamentMock } from "@/lib/mock-data";
+import { ConfirmDialog } from "@/components/admin/ui";
 
 function reloadMergedAsync(): Promise<TournamentMock[]> {
   return computeMergedTournaments();
@@ -29,6 +29,7 @@ function isEligibleActiveTournament(t: TournamentMock): boolean {
 
 export default function TorneosActivosPage() {
   const [list, setList] = useState<TournamentMock[]>([]);
+  const [pendingDone, setPendingDone] = useState<TournamentMock | null>(null);
 
   const refresh = useCallback(() => {
     void reloadMergedAsync().then((merged) =>
@@ -86,16 +87,7 @@ export default function TorneosActivosPage() {
                 <button
                   type="button"
                   className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-                  onClick={() => {
-                    if (
-                      !window.confirm(
-                        `¿Marcar "${t.name}" como hecho? Dejará de aparecer en Torneos activos (el itinerario público no se borra).`,
-                      )
-                    ) {
-                      return;
-                    }
-                    markActiveTournamentDone(t.slug);
-                  }}
+                  onClick={() => setPendingDone(t)}
                 >
                   Marcar como hecho
                 </button>
@@ -104,6 +96,21 @@ export default function TorneosActivosPage() {
           ))}
         </ul>
       )}
+      <ConfirmDialog
+        open={pendingDone != null}
+        title="Marcar torneo como hecho"
+        message={
+          pendingDone
+            ? `¿Marcar "${pendingDone.name}" como hecho? Dejará de aparecer en Torneos activos (el itinerario público no se borra).`
+            : ""
+        }
+        confirmLabel="Marcar hecho"
+        onCancel={() => setPendingDone(null)}
+        onConfirm={() => {
+          if (pendingDone) markActiveTournamentDone(pendingDone.slug);
+          setPendingDone(null);
+        }}
+      />
     </div>
   );
 }

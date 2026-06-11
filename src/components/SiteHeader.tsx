@@ -7,7 +7,7 @@ import { getPublicAdminHref } from "@/lib/app-surface";
 
 const NAV_LINKS = [
   { href: "/tournaments", label: "Torneos" },
-  { href: "/itinerarios", label: "Itinerario" },
+  { href: "/itinerarios", label: "Itinerarios" },
   { href: "/equipo", label: "Equipo" },
 ];
 

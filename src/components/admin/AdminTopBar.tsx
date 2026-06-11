@@ -1,9 +1,13 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clearSession, getCurrentOperator } from "@/lib/admin-operators-store";
 import type { AdminOperator } from "@/lib/admin-operator-types";
+import { resolveAdminPageMeta } from "@/lib/admin-nav";
+import { Button } from "@/components/admin/ui";
 
 function IconMenu({ className }: { className?: string }) {
   return (
@@ -18,7 +22,9 @@ type Props = {
 };
 
 export function AdminTopBar({ onMenuClick }: Props) {
+  const pathname = usePathname();
   const router = useRouter();
+  const pageMeta = resolveAdminPageMeta(pathname);
   const [op, setOp] = useState<AdminOperator | null>(() =>
     typeof window !== "undefined" ? getCurrentOperator() : null,
   );
@@ -87,23 +93,13 @@ export function AdminTopBar({ onMenuClick }: Props) {
   const barPad =
     "pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pt-[max(0.25rem,env(safe-area-inset-top,0px))]";
 
-  if (!op) {
-    return (
-      <header
-        className={`flex h-14 shrink-0 items-center justify-end border-b border-zinc-200 bg-white ${barPad}`}
-      >
-        <span className="text-xs text-zinc-400">—</span>
-      </header>
-    );
-  }
-
-  const roleLabel = op.role === "it_master" ? "IT maestro" : "Administrador";
+  const roleLabel = op?.role === "it_master" ? "IT maestro" : op ? "Administrador" : null;
 
   return (
     <header
-      className={`flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-zinc-200 bg-white py-2 ${barPad}`}
+      className={`flex min-h-14 shrink-0 flex-col gap-2 border-b border-zinc-200 bg-white py-2 sm:flex-row sm:items-center sm:justify-between ${barPad}`}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-start gap-2 sm:items-center">
         {onMenuClick ? (
           <button
             type="button"
@@ -114,17 +110,35 @@ export function AdminTopBar({ onMenuClick }: Props) {
             <IconMenu className="h-6 w-6" />
           </button>
         ) : null}
-        <p className="min-w-0 truncate text-xs text-zinc-500">
-          Sesión activa · <span className="font-medium text-zinc-800">{op.username}</span> · {roleLabel}
-        </p>
+        <div className="min-w-0">
+          <nav aria-label="Ruta" className="mb-0.5 flex flex-wrap items-center gap-1 text-[11px] text-zinc-500">
+            {pageMeta.breadcrumbs.map((crumb, i) => (
+              <span key={`${crumb.label}-${i}`} className="flex items-center gap-1">
+                {i > 0 ? <span aria-hidden>/</span> : null}
+                {crumb.href ? (
+                  <Link href={crumb.href} className="hover:text-sky-700">
+                    {crumb.label}
+                  </Link>
+                ) : (
+                  <span className="text-zinc-600">{crumb.label}</span>
+                )}
+              </span>
+            ))}
+          </nav>
+          <h1 className="truncate text-sm font-semibold text-zinc-900 sm:text-base">{pageMeta.title}</h1>
+        </div>
       </div>
-      <button
-        type="button"
-        onClick={() => void logout()}
-        className="shrink-0 rounded-lg border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 min-h-[44px] lg:min-h-0 lg:py-1.5"
-      >
-        Salir
-      </button>
+      <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+        {op ? (
+          <p className="hidden text-xs text-zinc-500 sm:block">
+            <span className="font-medium text-zinc-800">{op.username}</span>
+            {roleLabel ? ` · ${roleLabel}` : null}
+          </p>
+        ) : null}
+        <Button variant="secondary" className="min-h-[36px] px-3 py-1.5 text-xs" onClick={() => void logout()}>
+          Salir
+        </Button>
+      </div>
     </header>
   );
 }
