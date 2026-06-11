@@ -12,132 +12,190 @@ Documento de mano para retomar sin perder contexto. **No sustituye** el README d
 
 | Commit     | Descripción breve |
 | ---------- | ----------------- |
-| `cc6a8ea`  | **fix(admin):** elimina bucle de carga login↔admin; errores claros si falla DB/sesión; redirect `/` → `/admin/login` en surface admin; scripts `verify:deploy-urls` / `print:vercel-checklist`. |
-| `a94874d`  | fix(deploy): force Next.js framework on Vercel |
-| `80ffbc5`  | **Split Vercel público/admin:** `NEXT_PUBLIC_APP_SURFACE` en middleware (`public` → 404 en `/admin` y `/api/admin`), helper `src/lib/app-surface.ts`, endpoint `/api/public/db-status`, enlaces públicos al admin solo con `NEXT_PUBLIC_ADMIN_APP_URL`, docs `DEPLOY_SPLIT.md` / `.env.example`. |
-| `f08660d`  | fix(admin): persistir sesión admin en localStorage |
-| `c179bcb`  | Admin itinerario: bracket workspace, details, edición por diálogo y doble toque |
-| `bdbd8b1`  | Admin: página dedicada de itinerario con bracket y canchas |
-| `19cac6e`  | iOS/macOS: safe areas, `min-h-dvh`, header público responsive, CTAs ~44px, admin drawer `<lg` + overlay |
+| *(pendiente push)* | **feat(v2):** VolleyHub PR — app nuevo en `v2/` (website + admin local, JSON store, seed demo). |
+| `551443f`  | **feat(ux):** rediseño Portal de Administrador + web pública (app original en raíz). |
+| `17a149e`  | fix(admin): mensaje de error detallado si falla DB. |
+| `ae39bf9`  | docs: visión de producto y contexto Portal de Administrador. |
+| `cc6a8ea`  | fix(admin): elimina bucle login↔admin; redirect `/` → `/admin/login` en surface admin. |
 
-## Split Vercel — público + admin (referencia)
+---
 
-Implementación alineada al plan *Split Vercel Public/Admin*:
+## VolleyHub PR — app nuevo en `v2/` (jun 2026)
 
-1. **`src/lib/app-surface.ts`** — `getAppSurface()` (`public` \| `admin` \| `all` en dev), `getPublicAdminHref()`, `buildAdminHref()`.
-2. **`src/middleware.ts`** — Con `NEXT_PUBLIC_APP_SURFACE=public`, responde **404** a `/admin/*` y `/api/admin/*`. En `admin`/dev local, mantiene redirect a login cuando hay DB.
-3. **`src/app/api/public/db-status/route.ts`** — El sitio público ya no llama a `/api/admin/db` para saber si hay Postgres.
-4. **UI pública** — `SiteHeader`, footer en `(public)/layout.tsx` y enlace en `/equipo`: en surface `public` solo muestran enlace al admin si existe `NEXT_PUBLIC_ADMIN_APP_URL`.
-5. **Docs** — `docs/DEPLOY_SPLIT.md` (guía de dos proyectos Vercel), `.env.example`, `docs/DEPLOYMENT.md`.
+**Rediseño desde cero** del website público + Portal de Administrador. Mismo workflow de negocio, arquitectura nueva. **No reemplaza** el app de producción en la raíz del repo (Vercel + Postgres); es un **demo local** para iterar diseño y flujos.
 
-### Variables por proyecto Vercel
+### Arranque rápido
+
+```powershell
+cd "C:\Dev\volleyschedule-registrations\v2"
+npm install          # solo la primera vez
+npm run dev          # http://localhost:3001
+```
+
+| URL | Qué es |
+|-----|--------|
+| http://localhost:3001 | Website público (VolleyHub PR) |
+| http://localhost:3001/admin | Portal de Administrador |
+| http://localhost:3001/admin/login | Login admin |
+
+**Credenciales demo:** usuario `admin` · contraseña `volley2026`
+
+**Verificación:** `cd v2 && npm run build` (debe pasar).
+
+### Arquitectura (a diferencia del app original)
+
+```
+Público + Admin  →  API routes (Next.js)  →  v2/data/*.json
+                                              ↑ seed automático al primer arranque
+```
+
+- **Una sola fuente de verdad:** archivos JSON en `v2/data/` (`tournaments.json`, `registrations.json`, `clubs.json`, `rosters.json`, `admins.json`).
+- **Sin** Postgres, **sin** localStorage para datos de negocio (solo borrador de inscripción en el navegador).
+- **Sin** split Vercel (`NEXT_PUBLIC_APP_SURFACE`); todo en un host, puerto **3001**.
+- Carpeta `v2/data/` está en `.gitignore` — se regenera sola; para reset demo: borrar `v2/data/` y reiniciar `npm run dev`.
+
+### Datos demo incluidos (seed)
+
+| Torneo | Slug | Estado | Notas |
+|--------|------|--------|-------|
+| Copa Isla Invitacional | `copa-isla-invitacional-2026` | cerrado | **EN VIVO hoy** — bracket 8 equipos publicado, cuartos con resultados |
+| Copa 30 Summer | `copa-30-summer-2026` | abierto | 3 categorías, inscripciones de ejemplo |
+| Premier 5C | `premier-5c-2026` | abierto | Bayamón, 12U y 18U mixto |
+
+8 clubes de pueblos de PR (Caribe VC, Vaqueros, Gigantes, Mets, Criollas, Leonas, Indias, Grises) con rosters completos para probar **reutilizar datos** al inscribir.
+
+### Rutas públicas (`v2/src/app/(public)/`)
+
+| Ruta | Función |
+|------|---------|
+| `/` | Home: hero, banner EN VIVO, grid de torneos |
+| `/torneos` | Lista de torneos |
+| `/torneos/[slug]` | Detalle: categorías, tarifas, itinerario o empty state |
+| `/torneos/[slug]/inscribir` | Inscripción 3 pasos + reutilizar clubes previos + borrador autosave |
+| `/itinerarios` | Torneos con itinerario publicado y marcadores |
+
+### Rutas admin (`v2/src/app/admin/`)
+
+| Ruta | Función |
+|------|---------|
+| `/admin/login` | Login (cookie firmada) |
+| `/admin` | Dashboard: métricas + accesos a módulos |
+| `/admin/torneos` | Lista con búsqueda/filtro |
+| `/admin/torneos/nuevo` | Wizard 4 pasos (datos → divisiones/categorías → tarifas → resumen) |
+| `/admin/torneos/[slug]?tab=` | Detalle: resumen \| configuracion \| categorias \| inscripciones \| itinerario |
+| `/admin/torneos/[slug]/itinerario` | Creador de bracket: equipos elegibles, single elim o pools+bracket, horarios/canchas, publicar, anotar resultados |
+| `/admin/inscripciones` | Tabla global con filtros y cambio de status |
+| `/admin/inscripciones/[id]` | Detalle editable |
+| `/admin/equipos` | Clubes con búsqueda |
+| `/admin/equipos/[clubSlug]` | Perfil + equipos |
+| `/admin/equipos/[clubSlug]/roster/[rosterId]` | Editor de roster |
+| `/admin/torneos-activos` | Torneos en vivo con link al creador de itinerario |
+
+### API (`v2/src/app/api/`)
+
+| Método | Ruta | Auth | Uso |
+|--------|------|------|-----|
+| POST | `/api/auth/login` | — | Sesión admin |
+| POST | `/api/auth/logout` | cookie | Cerrar sesión |
+| GET | `/api/auth/me` | cookie | Operador actual |
+| GET/POST | `/api/tournaments` | POST admin | Listar / crear torneo |
+| GET/PATCH/DELETE | `/api/tournaments/[slug]` | PATCH/DELETE admin | Detalle / editar / borrar |
+| POST | `/api/registrations` | — | Inscripción pública |
+| PATCH | `/api/registrations/[id]` | admin | Cambiar status / editar |
+| GET | `/api/reuse?q=&exclude=` | — | Buscar clubes para reutilizar |
+| PATCH | `/api/clubs/[slug]` | admin | Perfil de club |
+| PATCH | `/api/rosters/[id]` | admin | Editor de roster |
+
+### Código clave (`v2/src/lib/`)
+
+| Archivo | Rol |
+|---------|-----|
+| `types.ts` | Modelo de datos + helpers (tarifas, labels, fechas) |
+| `store.ts` | Lectura/escritura JSON + seed al primer arranque |
+| `seed.ts` | Datos demo (torneos, clubes, admin) |
+| `auth.ts` | Cookie de sesión admin |
+| `schedule-engine.ts` | Brackets, pools, asignación de horarios, resolución de ganadores |
+
+### Flujo end-to-end recomendado (demo)
+
+1. Admin → **Copa 30 Summer** → tab **Itinerario** → generar bracket con inscripciones pagadas/aprobadas → **Publicar**.
+2. Público → **Copa 30 Summer** → **Inscribir** → buscar "Caribe" en reutilizar datos → completar categoría y firma.
+3. Admin → **Inscripciones** → cambiar status a **Pagado** o **Aprobado**.
+4. Público → **Itinerarios** → ver partidos; admin → **Copa Isla** → anotar marcadores en vivo.
+
+### Fuera de alcance en v2 (por diseño)
+
+Import CSV, PDF por email, registro de club `/equipo`, migración Postgres, split de deploys Vercel.
+
+### Documentación adicional
+
+- Detalle técnico: [`v2/README.md`](v2/README.md)
+
+---
+
+## App original (raíz del repo) — producción
+
+El app en la **raíz** (`npm run dev` puerto 3000) sigue siendo el de **producción** con Postgres (Railway) y split Vercel.
+
+### Split Vercel — público + admin
 
 | Proyecto | Obligatorias | No poner |
 |----------|--------------|----------|
-| **Público** | `NEXT_PUBLIC_APP_SURFACE=public`, `DATABASE_URL_POOLED`, `NEXT_PUBLIC_ADMIN_APP_URL=https://admin.tudominio.com` | `ADMIN_SESSION_SECRET` |
+| **Público** | `NEXT_PUBLIC_APP_SURFACE=public`, `DATABASE_URL_POOLED`, `NEXT_PUBLIC_ADMIN_APP_URL` | `ADMIN_SESSION_SECRET` |
 | **Admin** | `NEXT_PUBLIC_APP_SURFACE=admin`, `DATABASE_URL_POOLED`, `ADMIN_SESSION_SECRET` | — |
 
-Misma Postgres (Railway) en ambos. Migraciones: `npm run db:migrate` (una vez; no automático en Vercel).
+**Admin producción:** `https://volley-schedule-admin.vercel.app`
 
-**Deploy admin en producción (jun 2026):** `https://volley-schedule-admin.vercel.app` — Postgres Railway (`yamabiko.proxy.rlwy.net`). Migraciones aplicadas; pendiente setup IT maestro en `/admin/setup` si `needsSetup: true`.
+### UX redesign (jun 2026) — implementado en app original
 
-## Producto — visión y contexto (para mejoras UX)
+- Portal de Administrador: design system, sidebar, breadcrumbs, dashboard, wizard torneos, tabs, filtros.
+- Web pública: inscripción por pasos, reutilizar datos, borrador autosave, itinerarios con empty states.
+- Verificación: `npm run build` + `npm test` (74 tests) en la **raíz**.
 
-La app sirve a **organizadores** que manejan inscripciones y schedule de torneos de voleibol. Hay **dos superficies** (mismo repo, dos deploys Vercel):
+---
 
-| Superficie | Nombre de trabajo | Quién la usa |
-|------------|-------------------|--------------|
-| **Admin** | **Portal de Administrador** (antes “Plataforma organizador” en sidebar) | Organizador / staff |
-| **Público** | Website de registro | Clubes, jugadores, público |
-
-### Portal de Administrador — qué hace hoy (funciones a conservar)
-
-El organizador usa este portal para:
-
-1. **Torneos** — crear, editar, añadir categorías/divisiones.
-2. **Schedule** — montar brackets, itinerarios, canchas y horarios por torneo.
-3. **Inscripciones** — gestionar inscripciones **por torneo** (vista global y por evento).
-4. **Equipos** — guardar datos de equipos/clubes para reutilizar información entre torneos.
-
-Rutas admin actuales (referencia): `/admin`, `/admin/tournaments`, `/admin/torneos-activos`, `/admin/registrations`, `/admin/profiles`, `/admin/equipos`.
-
-### Website público — pareja del admin
-
-- Ver torneos **disponibles** y **activos**.
-- **Inscribirse** a torneos.
-
-Flujo crítico de negocio: al inscribirse, conviene **reutilizar roster/datos del equipo** ya guardados para que el cliente no vuelva a teclear todo en cada torneo. Eso conecta admin (equipos guardados) ↔ público (inscripción rápida).
-
-### Trabajo pendiente — mejora UX/UI (sin cambiar funciones)
-
-**Regla:** mismo comportamiento y capacidades; se puede reorganizar pantallas, copy, navegación y flujos visuales.
-
-**Enfoque acordado:** el usuario describe el uso real del app; con esa descripción se mejora la experiencia módulo a módulo.
-
-**Orden sugerido cuando retomemos:**
-
-1. Renombrar branding admin → **Portal de Administrador** (`AdminSidebar`, login, setup, metadata).
-2. Portal de Administrador — home, torneos, inscripciones, equipos, perfiles (según descripción detallada del usuario).
-3. Website público — torneos, inscripción, reutilización de roster (segunda fase).
-
-## UX redesign (jun 2026) — implementado
-
-Plan *Rediseño Portal y Web* aplicado en código:
-
-- **Portal de Administrador:** branding, design system (`src/components/admin/ui/`), sidebar por secciones (Operación / Administración), top bar con breadcrumbs, auth cache sin flash entre rutas, dashboard con métricas.
-- **Torneos admin:** wizard 4 pasos al crear, tabs en detalle (`?tab=`), búsqueda/filtros en lista, botón lápiz en categorías.
-- **Inscripciones:** filtros por torneo/estado, chips de estado, botón Editar visible.
-- **Equipos:** búsqueda, guardado unificado en detalle de club.
-- **Web público:** `/tournaments` usa datos merged, inscripción por pasos, reutilizar datos como primer paso, borrador automático, skeletons/empty states en itinerarios.
-
-Verificación: `npm run build` + `npm test` (74 tests).
-
-## Itinerario admin — workspace “solo bracket” (referencia)
-
-Implementación en `c179bcb` / commits previos:
-
-1. **`TournamentSchedulePanel.tsx`** — Modo `workspace`: configuración colapsable; bracket con scroll; ocupación por cancha en `<details>`; `MatchScheduleEditDialog`; doble clic / doble toque.
-2. **`ScheduleBracketView.tsx`**, **`ScheduleCourtsOverview.tsx`**, **`MatchScheduleEditDialog.tsx`**, **`use-double-tap.ts`**.
-
-## Plan móvil iOS / macOS (referencia)
-
-Implementado en `19cac6e`: safe areas, header responsive, CTAs 44px, admin drawer móvil.
-
-## Arranque local
+## Arranque local — resumen
 
 ```powershell
+# App original (producción local, puerto 3000)
 cd "C:\Dev\volleyschedule-registrations"
-npm install   # si falta node_modules
-npm run dev   # Next.js en el puerto por defecto (3000)
+npm install
+npm run dev
+
+# VolleyHub PR — demo nuevo (puerto 3001)
+cd "C:\Dev\volleyschedule-registrations\v2"
+npm install
+npm run dev
 ```
 
-Sin `NEXT_PUBLIC_APP_SURFACE`, en local sirve **público + admin** en el mismo host.
-
-Simular split:
+Simular split del app original (dos terminales):
 
 ```powershell
-# Público (puerto 3000)
+# Público (3000)
 $env:NEXT_PUBLIC_APP_SURFACE="public"; $env:NEXT_PUBLIC_ADMIN_APP_URL="http://localhost:3001"; npm run dev
 
-# Admin (puerto 3001, otra terminal)
+# Admin (3001)
+cd v2   # o el admin original en raíz con surface=admin
 $env:NEXT_PUBLIC_APP_SURFACE="admin"; npm run dev -- -p 3001
 ```
 
-## Verificación rápida antes de presentar
-
-- `npm run build` y `npm test` deben pasar.
-- **Proyecto público (Vercel):** `/` OK; `/admin` → **404**; enlaces al panel apuntan a `NEXT_PUBLIC_ADMIN_APP_URL`.
-- **Proyecto admin (Vercel):** `/admin/login` OK con `ADMIN_SESSION_SECRET`.
-- En **iPhone**: probar `/`, `/tournaments`, `/itinerarios`, inscripción; itinerario admin con doble toque.
+---
 
 ## Próximos pasos (si retomas)
 
-1. ~~Crear **dos proyectos Vercel**~~ — hecho (`volley-schedule-admin` + público).
-2. ~~Migraciones Railway~~ — hecho (`npm run db:migrate` contra Postgres Railway).
-3. Completar **setup IT maestro** en `/admin/setup` si aún no hay operadores en DB.
-4. ~~**Mejora UX Portal de Administrador**~~ — implementado (jun 2026); ver sección *UX redesign*.
-5. Rotar contraseña Postgres si se expuso en chat; actualizar `DATABASE_URL` en ambos Vercel.
-6. Opcional: PWA, rate limit en `/api/club-registration/send-pdf`.
+### VolleyV2 (`v2/`)
+
+1. Probar flujos manualmente en http://localhost:3001.
+2. Decidir si migrar ideas de v2 al app de producción o seguir iterando en v2.
+3. Opcional: conectar v2 a Postgres más adelante (hoy es solo JSON local).
+
+### App original (producción)
+
+1. Completar **setup IT maestro** en `/admin/setup` si `needsSetup: true`.
+2. Rotar contraseña Postgres si se expuso en chat; actualizar `DATABASE_URL` en Vercel.
+3. Redeploy ambos proyectos Vercel tras commits de UX (`551443f`).
+
+---
 
 ## Cómo seguir en otra PC
 
@@ -145,10 +203,11 @@ $env:NEXT_PUBLIC_APP_SURFACE="admin"; npm run dev -- -p 3001
 git clone https://github.com/Gerardito24/Volley-Schedule.git
 cd Volley-Schedule
 git pull origin main
-npm install
-npm run dev
+npm install          # app original
+cd v2 && npm install # VolleyHub PR
+npm run dev          # desde v2 → puerto 3001
 ```
 
 ---
 
-*Generado para cerrar sesión; actualizar este archivo cuando cambie algo relevante.*
+*Actualizado jun 2026 — incluye VolleyHub PR (`v2/`) y estado del app original.*

@@ -1,0 +1,830 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import type {
+  CategorySchedule,
+  Match,
+  Registration,
+  ScheduleTemplate,
+  Tournament,
+  TournamentSchedule,
+} from "@/lib/types";
+import {
+  BRACKET_ELIGIBLE_STATUSES,
+  categoryLabel,
+  REGISTRATION_STATUS_LABELS,
+} from "@/lib/types";
+import {
+  autoAssignSchedule,
+  categoryChampion,
+  computePoolStandings,
+  generatePoolsBracket,
+  generateSingleElim,
+  playableMatches,
+  resolveSide,
+} from "@/lib/schedule-engine";
+import { btnDanger, btnPrimary, btnSecondary, card, inputClass, labelClass } from "./ui";
+import ConfirmDialog from "./ConfirmDialog";
+
+interface Props {
+  tournament: Tournament;
+  registrations: Registration[];
+}
+
+function emptySchedule(): TournamentSchedule {
+  return { published: false, categories: [] };
+}
+
+function courtOptions(tournament: Tournament): string[] {
+  const single = tournament.venues.length === 1;
+  return tournament.venues.flatMap((venue) =>
+    Array.from({ length: Math.max(venue.courtCount, 1) }, (_, i) =>
+      single ? `Cancha ${i + 1}` : `${venue.label} · Cancha ${i + 1}`,
+    ),
+  );
+}
+
+function defaultStartLocal(tournament: Tournament): string {
+  return `${tournament.startsOn || new Date().toISOString().slice(0, 10)}T09:00`;
+}
+
+function toLocalInput(iso: string | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatTime(iso: string | undefined): string {
+  if (!iso) return "Sin horario";
+  return new Date(iso).toLocaleString("es-PR", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+export default function ScheduleWorkspace({ tournament, registrations }: Props) {
+  const router = useRouter();
+  const [schedule, setSchedule] = useState<TournamentSchedule>(
+    tournament.schedule ?? emptySchedule(),
+  );
+  const [activeCategoryId, setActiveCategoryId] = useState(
+    tournament.categories[0]?.id ?? "",
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  const activeCategory = tournament.categories.find((c) => c.id === activeCategoryId);
+  const activeSchedule = schedule.categories.find(
+    (cs) => cs.categoryId === activeCategoryId,
+  );
+
+  async function persist(next: TournamentSchedule) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/tournaments/${tournament.slug}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ schedule: next }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? "No se pudo guardar");
+      }
+      setSchedule(next);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function upsertCategorySchedule(cs: CategorySchedule) {
+    const others = schedule.categories.filter((c) => c.categoryId !== cs.categoryId);
+    void persist({ ...schedule, categories: [...others, cs] });
+  }
+
+  function updateMatch(matchId: string, patch: Partial<Match>) {
+    if (!activeSchedule) return;
+    const matches = activeSchedule.matches.map((m) =>
+      m.id === matchId ? { ...m, ...patch } : m,
+    );
+    upsertCategorySchedule({ ...activeSchedule, matches });
+  }
+
+  function removeCategorySchedule() {
+    const next = {
+      ...schedule,
+      categories: schedule.categories.filter((c) => c.categoryId !== activeCategoryId),
+    };
+    setConfirmReset(false);
+    void persist(next);
+  }
+
+  if (tournament.categories.length === 0) {
+    return (
+      <div className={`${card} p-8 text-center text-sm text-zinc-500`}>
+        Este torneo no tiene categorías todavía. Crea las categorías en la
+        configuración del torneo antes de armar el itinerario.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Publicación */}
+      <div className={`${card} flex flex-wrap items-center justify-between gap-4 p-4`}>
+        <div className="flex items-center gap-3">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+              schedule.published
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-zinc-100 text-zinc-600"
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                schedule.published ? "bg-emerald-500" : "bg-zinc-400"
+              }`}
+            />
+            {schedule.published ? "Publicado" : "Borrador"}
+          </span>
+          <p className="text-sm text-zinc-500">
+            {schedule.published
+              ? "El itinerario es visible en el website público."
+              : "El público no ve este itinerario hasta que lo publiques."}
+          </p>
+        </div>
+        <button
+          type="button"
+          className={schedule.published ? btnSecondary : btnPrimary}
+          disabled={saving || schedule.categories.length === 0}
+          onClick={() => void persist({ ...schedule, published: !schedule.published })}
+        >
+          {schedule.published ? "Despublicar" : "Publicar itinerario"}
+        </button>
+      </div>
+
+      {error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
+
+      {/* Tabs de categorías */}
+      <div className="flex flex-wrap gap-2">
+        {tournament.categories.map((cat) => {
+          const has = schedule.categories.some((cs) => cs.categoryId === cat.id);
+          const active = cat.id === activeCategoryId;
+          return (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setActiveCategoryId(cat.id)}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                active
+                  ? "border-indigo-600 bg-indigo-600 text-white"
+                  : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
+              }`}
+            >
+              {categoryLabel(tournament, cat)}
+              {has ? <span className="ml-1.5 text-xs opacity-80">●</span> : null}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeCategory ? (
+        activeSchedule ? (
+          <CategoryScheduleView
+            tournament={tournament}
+            cs={activeSchedule}
+            saving={saving}
+            onUpdateMatch={updateMatch}
+            onRequestReset={() => setConfirmReset(true)}
+          />
+        ) : (
+          <CategoryBuilder
+            key={activeCategory.id}
+            tournament={tournament}
+            categoryId={activeCategory.id}
+            registrations={registrations.filter((r) => r.categoryId === activeCategory.id)}
+            saving={saving}
+            onGenerate={upsertCategorySchedule}
+          />
+        )
+      ) : null}
+
+      <ConfirmDialog
+        open={confirmReset}
+        title="Eliminar itinerario de la categoría"
+        description="Se borran los partidos y resultados de esta categoría para que puedas generarlos de nuevo. Esta acción no se puede deshacer."
+        confirmLabel="Eliminar y regenerar"
+        busy={saving}
+        onConfirm={removeCategorySchedule}
+        onCancel={() => setConfirmReset(false)}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Builder: seleccionar equipos, plantilla y generar partidos
+// ---------------------------------------------------------------------------
+
+function CategoryBuilder({
+  tournament,
+  categoryId,
+  registrations,
+  saving,
+  onGenerate,
+}: {
+  tournament: Tournament;
+  categoryId: string;
+  registrations: Registration[];
+  saving: boolean;
+  onGenerate: (cs: CategorySchedule) => void;
+}) {
+  const eligible = useMemo(
+    () =>
+      registrations
+        .filter((r) => BRACKET_ELIGIBLE_STATUSES.includes(r.status))
+        .sort((a, b) => a.registeredAt.localeCompare(b.registeredAt)),
+    [registrations],
+  );
+  const courts = useMemo(() => courtOptions(tournament), [tournament]);
+
+  const [selectedIds, setSelectedIds] = useState<string[]>(eligible.map((r) => r.id));
+  const [manualTeams, setManualTeams] = useState<string[]>([]);
+  const [manualInput, setManualInput] = useState("");
+  const [template, setTemplate] = useState<ScheduleTemplate>("single_elim");
+  const [poolCount, setPoolCount] = useState(2);
+  const [advancePerPool, setAdvancePerPool] = useState(2);
+  const [startLocal, setStartLocal] = useState(defaultStartLocal(tournament));
+  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [selectedCourts, setSelectedCourts] = useState<string[]>(courts);
+  const [validation, setValidation] = useState<string | null>(null);
+
+  const teamCount = selectedIds.length + manualTeams.length;
+
+  function toggleRegistration(id: string) {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  function toggleCourt(court: string) {
+    setSelectedCourts((prev) =>
+      prev.includes(court) ? prev.filter((c) => c !== court) : [...prev, court],
+    );
+  }
+
+  function generate() {
+    if (teamCount < 2) {
+      setValidation("Necesitas al menos 2 equipos para generar partidos.");
+      return;
+    }
+    if (selectedCourts.length === 0) {
+      setValidation("Selecciona al menos una cancha.");
+      return;
+    }
+    if (!startLocal) {
+      setValidation("Indica la fecha y hora del primer partido.");
+      return;
+    }
+    if (template === "pools_bracket" && teamCount < poolCount * 2) {
+      setValidation("No hay suficientes equipos para esa cantidad de pools.");
+      return;
+    }
+    setValidation(null);
+
+    const orderedRegs = eligible.filter((r) => selectedIds.includes(r.id));
+    const teams = [
+      ...orderedRegs.map((r, i) => ({
+        seed: i,
+        label: r.teamName,
+        registrationId: r.id,
+      })),
+      ...manualTeams.map((label, i) => ({
+        seed: orderedRegs.length + i,
+        label,
+      })),
+    ];
+
+    const settings = {
+      template,
+      startAt: new Date(startLocal).toISOString(),
+      durationMinutes,
+      courts: selectedCourts,
+      ...(template === "pools_bracket" ? { poolCount, advancePerPool } : {}),
+    };
+    const generated =
+      template === "single_elim"
+        ? generateSingleElim(teams.length)
+        : generatePoolsBracket(teams.length, poolCount, advancePerPool);
+    const matches = autoAssignSchedule(generated.matches, settings);
+
+    onGenerate({
+      categoryId,
+      teams,
+      pools: generated.pools,
+      matches,
+      settings,
+    });
+  }
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      {/* Equipos */}
+      <div className={`${card} p-5`}>
+        <h3 className="text-sm font-semibold text-zinc-900">1. Equipos del bracket</h3>
+        <p className="mt-1 text-xs text-zinc-500">
+          Solo inscripciones pagadas o aprobadas. La siembra sigue el orden de
+          inscripción.
+        </p>
+        <div className="mt-4 space-y-2">
+          {eligible.length === 0 ? (
+            <p className="rounded-lg bg-zinc-50 px-3 py-4 text-center text-sm text-zinc-500">
+              No hay inscripciones elegibles en esta categoría.
+            </p>
+          ) : (
+            eligible.map((r, i) => (
+              <label
+                key={r.id}
+                className="flex cursor-pointer items-center gap-3 rounded-lg border border-zinc-200 px-3 py-2 text-sm hover:bg-zinc-50"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(r.id)}
+                  onChange={() => toggleRegistration(r.id)}
+                  className="h-4 w-4 accent-indigo-600"
+                />
+                <span className="w-6 text-xs font-semibold text-zinc-400">#{i + 1}</span>
+                <span className="flex-1 font-medium text-zinc-800">{r.teamName}</span>
+                <span className="text-xs text-zinc-500">
+                  {REGISTRATION_STATUS_LABELS[r.status]}
+                </span>
+              </label>
+            ))
+          )}
+        </div>
+        <div className="mt-4 border-t border-zinc-100 pt-4">
+          <label className={labelClass}>Añadir equipo manual</label>
+          <div className="flex gap-2">
+            <input
+              className={inputClass}
+              value={manualInput}
+              onChange={(e) => setManualInput(e.target.value)}
+              placeholder="Nombre del equipo"
+            />
+            <button
+              type="button"
+              className={btnSecondary}
+              onClick={() => {
+                if (!manualInput.trim()) return;
+                setManualTeams((prev) => [...prev, manualInput.trim()]);
+                setManualInput("");
+              }}
+            >
+              Añadir
+            </button>
+          </div>
+          {manualTeams.length > 0 ? (
+            <ul className="mt-2 space-y-1">
+              {manualTeams.map((t, i) => (
+                <li
+                  key={`${t}-${i}`}
+                  className="flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-1.5 text-sm text-zinc-700"
+                >
+                  {t}
+                  <button
+                    type="button"
+                    className="text-xs text-red-600 hover:underline"
+                    onClick={() =>
+                      setManualTeams((prev) => prev.filter((_, idx) => idx !== i))
+                    }
+                  >
+                    Quitar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        <p className="mt-3 text-xs font-medium text-zinc-500">
+          {teamCount} equipo{teamCount === 1 ? "" : "s"} seleccionados
+        </p>
+      </div>
+
+      {/* Formato y horarios */}
+      <div className={`${card} space-y-4 p-5`}>
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-900">2. Formato</h3>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setTemplate("single_elim")}
+              className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                template === "single_elim"
+                  ? "border-indigo-600 bg-indigo-50 text-indigo-900"
+                  : "border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+              }`}
+            >
+              <span className="font-medium">Eliminación sencilla</span>
+              <span className="mt-0.5 block text-xs text-zinc-500">
+                Bracket directo; pierdes y quedas fuera.
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTemplate("pools_bracket")}
+              className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                template === "pools_bracket"
+                  ? "border-indigo-600 bg-indigo-50 text-indigo-900"
+                  : "border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+              }`}
+            >
+              <span className="font-medium">Pools + bracket</span>
+              <span className="mt-0.5 block text-xs text-zinc-500">
+                Round robin por pool y clasifican los mejores.
+              </span>
+            </button>
+          </div>
+          {template === "pools_bracket" ? (
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Cantidad de pools</label>
+                <input
+                  type="number"
+                  min={2}
+                  max={8}
+                  className={inputClass}
+                  value={poolCount}
+                  onChange={(e) => setPoolCount(Math.max(2, Number(e.target.value) || 2))}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Clasifican por pool</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={4}
+                  className={inputClass}
+                  value={advancePerPool}
+                  onChange={(e) =>
+                    setAdvancePerPool(Math.max(1, Number(e.target.value) || 1))
+                  }
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-900">3. Horarios y canchas</h3>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Primer partido</label>
+              <input
+                type="datetime-local"
+                className={inputClass}
+                value={startLocal}
+                onChange={(e) => setStartLocal(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Duración por partido (min)</label>
+              <input
+                type="number"
+                min={20}
+                step={5}
+                className={inputClass}
+                value={durationMinutes}
+                onChange={(e) =>
+                  setDurationMinutes(Math.max(20, Number(e.target.value) || 60))
+                }
+              />
+            </div>
+          </div>
+          <div className="mt-3">
+            <label className={labelClass}>Canchas disponibles</label>
+            {courts.length === 0 ? (
+              <p className="text-xs text-zinc-500">
+                Este torneo no tiene sedes con canchas; añádelas en Configuración.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {courts.map((court) => (
+                  <label
+                    key={court}
+                    className={`cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-medium ${
+                      selectedCourts.includes(court)
+                        ? "border-indigo-600 bg-indigo-50 text-indigo-800"
+                        : "border-zinc-300 text-zinc-600 hover:bg-zinc-50"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={selectedCourts.includes(court)}
+                      onChange={() => toggleCourt(court)}
+                    />
+                    {court}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {validation ? (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            {validation}
+          </p>
+        ) : null}
+
+        <button
+          type="button"
+          className={`${btnPrimary} w-full`}
+          disabled={saving}
+          onClick={generate}
+        >
+          {saving ? "Generando…" : "Generar partidos"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Vista de partidos: standings, resultados en vivo y edición de horarios
+// ---------------------------------------------------------------------------
+
+function CategoryScheduleView({
+  tournament,
+  cs,
+  saving,
+  onUpdateMatch,
+  onRequestReset,
+}: {
+  tournament: Tournament;
+  cs: CategorySchedule;
+  saving: boolean;
+  onUpdateMatch: (matchId: string, patch: Partial<Match>) => void;
+  onRequestReset: () => void;
+}) {
+  const matches = playableMatches(cs);
+  const phases = [...new Set(matches.map((m) => m.phaseLabel))];
+  const champion = categoryChampion(cs);
+  const courts = courtOptions(tournament);
+  const played = matches.filter((m) => m.result).length;
+
+  return (
+    <div className="space-y-5">
+      <div className={`${card} flex flex-wrap items-center justify-between gap-3 p-4`}>
+        <div className="text-sm text-zinc-600">
+          <span className="font-semibold text-zinc-900">{cs.teams.length}</span> equipos ·{" "}
+          <span className="font-semibold text-zinc-900">{matches.length}</span> partidos ·{" "}
+          <span className="font-semibold text-zinc-900">{played}</span> jugados
+        </div>
+        <button type="button" className={btnDanger} onClick={onRequestReset}>
+          Eliminar y regenerar
+        </button>
+      </div>
+
+      {champion ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+          Campeón de la categoría: {champion}
+        </div>
+      ) : null}
+
+      {cs.pools.length > 0 ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {cs.pools.map((pool) => {
+            const { standings } = computePoolStandings(cs, pool.id);
+            return (
+              <div key={pool.id} className={`${card} p-4`}>
+                <h4 className="text-sm font-semibold text-zinc-900">{pool.label}</h4>
+                <table className="mt-2 w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-zinc-400">
+                      <th className="py-1 font-medium">Equipo</th>
+                      <th className="py-1 text-center font-medium">G</th>
+                      <th className="py-1 text-center font-medium">P</th>
+                      <th className="py-1 text-center font-medium">Dif</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {standings.map((s) => (
+                      <tr key={s.seed} className="border-t border-zinc-100">
+                        <td className="py-1.5 text-zinc-800">
+                          {cs.teams.find((t) => t.seed === s.seed)?.label ?? "—"}
+                        </td>
+                        <td className="py-1.5 text-center">{s.wins}</td>
+                        <td className="py-1.5 text-center">{s.losses}</td>
+                        <td className="py-1.5 text-center">
+                          {s.pointDiff > 0 ? `+${s.pointDiff}` : s.pointDiff}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {phases.map((phase) => (
+        <div key={phase} className={`${card} p-4`}>
+          <h4 className="text-sm font-semibold text-zinc-900">{phase}</h4>
+          <div className="mt-3 space-y-2">
+            {matches
+              .filter((m) => m.phaseLabel === phase)
+              .map((m) => (
+                <MatchRow
+                  key={m.id}
+                  cs={cs}
+                  match={m}
+                  courts={courts}
+                  saving={saving}
+                  onUpdate={(patch) => onUpdateMatch(m.id, patch)}
+                />
+              ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MatchRow({
+  cs,
+  match,
+  courts,
+  saving,
+  onUpdate,
+}: {
+  cs: CategorySchedule;
+  match: Match;
+  courts: string[];
+  saving: boolean;
+  onUpdate: (patch: Partial<Match>) => void;
+}) {
+  const home = resolveSide(cs, match.home);
+  const away = resolveSide(cs, match.away);
+  const ready = home.decided && away.decided;
+  const [editing, setEditing] = useState(false);
+  const [homeScore, setHomeScore] = useState(match.result?.home?.toString() ?? "");
+  const [awayScore, setAwayScore] = useState(match.result?.away?.toString() ?? "");
+  const [timeLocal, setTimeLocal] = useState(toLocalInput(match.startsAt));
+  const [court, setCourt] = useState(match.court ?? "");
+
+  function saveResult() {
+    const h = Number(homeScore);
+    const a = Number(awayScore);
+    if (!Number.isFinite(h) || !Number.isFinite(a) || homeScore === "" || awayScore === "") {
+      return;
+    }
+    if (h === a) return; // en voleibol no hay empates
+    onUpdate({ result: { home: h, away: a, recordedAt: new Date().toISOString() } });
+  }
+
+  function saveAssignment() {
+    onUpdate({
+      startsAt: timeLocal ? new Date(timeLocal).toISOString() : undefined,
+      court: court || undefined,
+    });
+    setEditing(false);
+  }
+
+  const winnerHome =
+    match.result != null && match.result.home > match.result.away;
+
+  return (
+    <div className="rounded-lg border border-zinc-200 px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="min-w-44 text-xs text-zinc-500">
+          <div>{formatTime(match.startsAt)}</div>
+          <div>{match.court ?? "Sin cancha"}</div>
+        </div>
+        <div className="min-w-0 flex-1 text-sm">
+          <span
+            className={`${home.decided ? "text-zinc-900" : "italic text-zinc-400"} ${
+              match.result && winnerHome ? "font-semibold" : ""
+            }`}
+          >
+            {home.label}
+          </span>
+          <span className="mx-2 text-zinc-400">vs</span>
+          <span
+            className={`${away.decided ? "text-zinc-900" : "italic text-zinc-400"} ${
+              match.result && !winnerHome ? "font-semibold" : ""
+            }`}
+          >
+            {away.label}
+          </span>
+        </div>
+        {match.result ? (
+          <span className="rounded-md bg-zinc-900 px-2 py-0.5 text-sm font-semibold text-white">
+            {match.result.home} – {match.result.away}
+          </span>
+        ) : ready ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              min={0}
+              className="w-14 rounded-lg border border-zinc-300 px-2 py-1 text-center text-sm"
+              value={homeScore}
+              onChange={(e) => setHomeScore(e.target.value)}
+              aria-label="Sets local"
+            />
+            <span className="text-xs text-zinc-400">–</span>
+            <input
+              type="number"
+              min={0}
+              className="w-14 rounded-lg border border-zinc-300 px-2 py-1 text-center text-sm"
+              value={awayScore}
+              onChange={(e) => setAwayScore(e.target.value)}
+              aria-label="Sets visitante"
+            />
+            <button
+              type="button"
+              className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+              disabled={saving}
+              onClick={saveResult}
+            >
+              Anotar
+            </button>
+          </div>
+        ) : (
+          <span className="text-xs italic text-zinc-400">Por definir</span>
+        )}
+        <div className="flex items-center gap-2">
+          {match.result ? (
+            <button
+              type="button"
+              className="text-xs text-zinc-500 hover:text-red-600 hover:underline"
+              disabled={saving}
+              onClick={() => {
+                setHomeScore("");
+                setAwayScore("");
+                onUpdate({ result: null });
+              }}
+            >
+              Borrar resultado
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="text-xs text-indigo-600 hover:underline"
+            onClick={() => setEditing((v) => !v)}
+          >
+            {editing ? "Cancelar" : "Editar horario"}
+          </button>
+        </div>
+      </div>
+      {editing ? (
+        <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-zinc-100 pt-3">
+          <div>
+            <label className={labelClass}>Fecha y hora</label>
+            <input
+              type="datetime-local"
+              className={inputClass}
+              value={timeLocal}
+              onChange={(e) => setTimeLocal(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Cancha</label>
+            <select
+              className={inputClass}
+              value={court}
+              onChange={(e) => setCourt(e.target.value)}
+            >
+              <option value="">Sin cancha</option>
+              {courts.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            className={btnSecondary}
+            disabled={saving}
+            onClick={saveAssignment}
+          >
+            Guardar horario
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
