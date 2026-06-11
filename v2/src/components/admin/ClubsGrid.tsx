@@ -12,6 +12,7 @@ export interface ClubCard {
   contactEmail: string;
   teamsCount: number;
   registrationsCount: number;
+  categories: string[];
 }
 
 export default function ClubsGrid({ clubs }: { clubs: ClubCard[] }) {
@@ -22,7 +23,9 @@ export default function ClubsGrid({ clubs }: { clubs: ClubCard[] }) {
     if (!q) return clubs;
     return clubs.filter(
       (c) =>
-        c.displayName.toLowerCase().includes(q) || c.pueblo.toLowerCase().includes(q),
+        c.displayName.toLowerCase().includes(q) ||
+        c.pueblo.toLowerCase().includes(q) ||
+        c.categories.some((cat) => cat.toLowerCase().includes(q)),
     );
   }, [clubs, query]);
 
@@ -56,8 +59,25 @@ export default function ClubsGrid({ clubs }: { clubs: ClubCard[] }) {
               <p className="mt-2 text-xs text-zinc-500">
                 {c.contactName} · {c.contactEmail}
               </p>
+              {c.categories.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {c.categories.slice(0, 4).map((cat) => (
+                    <span
+                      key={cat}
+                      className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700"
+                    >
+                      {cat}
+                    </span>
+                  ))}
+                  {c.categories.length > 4 && (
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500">
+                      +{c.categories.length - 4}
+                    </span>
+                  )}
+                </div>
+              )}
               <p className="mt-3 text-xs text-zinc-500">
-                <span className="font-medium text-zinc-900">{c.teamsCount}</span> equipos guardados
+                <span className="font-medium text-zinc-900">{c.teamsCount}</span> equipos
                 {" · "}
                 <span className="font-medium text-zinc-900">{c.registrationsCount}</span>{" "}
                 inscripciones
