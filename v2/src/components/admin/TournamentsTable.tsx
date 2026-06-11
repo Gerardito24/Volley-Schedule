@@ -2,10 +2,13 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { TournamentStatus } from "@/lib/types";
 import { formatDateRangeEs } from "@/lib/types";
 import { TournamentStatusChip } from "./StatusChip";
 import { card, inputClass } from "./ui";
+import ActionsMenu from "./ActionsMenu";
+import ConfirmDialog from "./ConfirmDialog";
 
 export interface TournamentRow {
   slug: string;
@@ -28,8 +31,34 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
 ];
 
 export default function TournamentsTable({ tournaments }: { tournaments: TournamentRow[] }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("todos");
+  const [deleteTarget, setDeleteTarget] = useState<TournamentRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function deleteTournament() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/tournaments/${deleteTarget.slug}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error ?? "No se pudo eliminar el torneo.");
+        return;
+      }
+      setDeleteTarget(null);
+      router.refresh();
+    } catch {
+      setError("Error de conexión. Intenta de nuevo.");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -82,6 +111,7 @@ export default function TournamentsTable({ tournaments }: { tournaments: Tournam
                 <th className="px-4 py-3 font-medium">Categorías</th>
                 <th className="px-4 py-3 font-medium">Inscripciones</th>
                 <th className="px-4 py-3 font-medium">Itinerario</th>
+                <th className="px-4 py-3 font-medium" />
               </tr>
             </thead>
             <tbody>
@@ -112,12 +142,51 @@ export default function TournamentsTable({ tournaments }: { tournaments: Tournam
                       <span className="text-xs text-zinc-400">Sin publicar</span>
                     )}
                   </td>
+                  <td className="px-4 py-3 text-right">
+                    <ActionsMenu
+                      actions={[
+                        {
+                          label: "Abrir torneo",
+                          onSelect: () => router.push(`/admin/torneos/${t.slug}`),
+                        },
+                        {
+                          label: "Creador de itinerario",
+                          onSelect: () => router.push(`/admin/torneos/${t.slug}/itinerario`),
+                        },
+                        {
+                          label: "Eliminar torneo",
+                          danger: true,
+                          onSelect: () => setDeleteTarget(t),
+                        },
+                      ]}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {error && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Eliminar torneo"
+        description={
+          deleteTarget
+            ? `Se eliminará "${deleteTarget.name}" con sus ${deleteTarget.registrationsCount} inscripciones, rosters e itinerario. Esta acción no se puede deshacer.`
+            : ""
+        }
+        confirmLabel="Eliminar torneo"
+        busy={deleting}
+        onConfirm={deleteTournament}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

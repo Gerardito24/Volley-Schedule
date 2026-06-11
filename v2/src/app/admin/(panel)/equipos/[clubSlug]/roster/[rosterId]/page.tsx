@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getClub, getRegistration, getRoster, getTournament } from "@/lib/store";
 import type { TeamRoster } from "@/lib/types";
 import RosterEditor from "@/components/admin/RosterEditor";
+import DeleteButton from "@/components/admin/DeleteButton";
 
 export const dynamic = "force-dynamic";
 
@@ -59,11 +60,22 @@ export default async function RosterEditorPage({ params }: PageProps) {
           <span>/</span>
           <span className="text-zinc-900">{roster.teamName}</span>
         </nav>
-        <h1 className="mt-2 text-2xl font-semibold text-zinc-900">{roster.teamName}</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          {roster.clubName}
-          {tournament ? ` · ${tournament.name}` : ""}
-        </p>
+        <div className="mt-2 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-zinc-900">{roster.teamName}</h1>
+            <p className="mt-1 text-sm text-zinc-500">
+              {roster.clubName}
+              {tournament ? ` · ${tournament.name}` : ""}
+            </p>
+          </div>
+          <DeleteButton
+            url={`/api/rosters/${roster.id}`}
+            confirmTitle="Eliminar equipo guardado"
+            confirmDescription={`Se eliminará el roster de ${roster.teamName}. La inscripción en el torneo se conserva.`}
+            redirectTo={`/admin/equipos/${clubSlug}`}
+            actionLabel="Eliminar equipo"
+          />
+        </div>
       </div>
 
       <RosterEditor roster={enriched} />

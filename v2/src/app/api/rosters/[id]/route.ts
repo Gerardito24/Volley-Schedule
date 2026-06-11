@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionAdmin } from "@/lib/auth";
-import { getRoster, saveRoster } from "@/lib/store";
+import { deleteRoster, getRoster, saveRoster } from "@/lib/store";
 import type { TeamRoster } from "@/lib/types";
 
 type Params = { params: Promise<{ id: string }> };
@@ -24,4 +24,14 @@ export async function PATCH(request: Request, { params }: Params) {
   };
   await saveRoster(updated);
   return NextResponse.json({ roster: updated });
+}
+
+export async function DELETE(_request: Request, { params }: Params) {
+  const admin = await getSessionAdmin();
+  if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const { id } = await params;
+  const existing = await getRoster(id);
+  if (!existing) return NextResponse.json({ error: "No existe" }, { status: 404 });
+  await deleteRoster(id);
+  return NextResponse.json({ ok: true });
 }

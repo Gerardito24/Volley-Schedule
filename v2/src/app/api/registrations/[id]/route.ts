@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionAdmin } from "@/lib/auth";
-import { getRegistration, saveRegistration } from "@/lib/store";
+import { deleteRegistration, getRegistration, saveRegistration } from "@/lib/store";
 import type { Registration } from "@/lib/types";
 
 type Params = { params: Promise<{ id: string }> };
@@ -40,4 +40,14 @@ export async function PATCH(request: Request, { params }: Params) {
   }
   await saveRegistration(updated);
   return NextResponse.json({ registration: updated });
+}
+
+export async function DELETE(_request: Request, { params }: Params) {
+  const admin = await getSessionAdmin();
+  if (!admin) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const { id } = await params;
+  const existing = await getRegistration(id);
+  if (!existing) return NextResponse.json({ error: "No existe" }, { status: 404 });
+  await deleteRegistration(id);
+  return NextResponse.json({ ok: true });
 }

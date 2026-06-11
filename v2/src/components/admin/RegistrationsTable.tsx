@@ -10,7 +10,9 @@ import {
   formatDateEs,
   formatUsd,
 } from "@/lib/types";
-import { card, inputClass } from "./ui";
+import { btnSecondary, card, inputClass } from "./ui";
+import ActionsMenu from "./ActionsMenu";
+import ConfirmDialog from "./ConfirmDialog";
 
 export interface RegistrationRow {
   id: string;
@@ -55,6 +57,8 @@ export default function RegistrationsTable({
   const [paymentFilter, setPaymentFilter] = useState<"todos" | PaymentStatus>("todos");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<RegistrationRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -72,6 +76,103 @@ export default function RegistrationsTable({
       return true;
     });
   }, [registrations, query, tournamentFilter, approvalFilter, paymentFilter]);
+
+  function exportCsv() {
+    const header = [
+      "Equipo",
+      "Club",
+      "Torneo",
+      "Categoría",
+      "Fecha",
+      "Tarifa (USD)",
+      "Aprobación",
+      "Pago",
+    ];
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const lines = filtered.map((r) =>
+      [
+        r.teamName,
+        r.clubName,
+        r.tournamentName,
+        r.categoryLabel,
+        r.registeredAt.slice(0, 10),
+        (r.feeCents / 100).toFixed(2),
+        APPROVAL_STATUS_LABELS[r.approval],
+        PAYMENT_STATUS_LABELS[r.paymentStatus],
+      ]
+        .map(escape)
+        .join(","),
+    );
+    const csv = "﻿" + [header.map(escape).join(","), ...lines].join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `inscripciones-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function printTable() {
+    const rows = filtered
+      .map(
+        (r) => `<tr>
+          <td>${r.teamName}</td>
+          <td>${r.clubName}</td>
+          <td>${r.tournamentName}</td>
+          <td>${r.categoryLabel}</td>
+          <td>${formatDateEs(r.registeredAt.slice(0, 10))}</td>
+          <td>${formatUsd(r.feeCents)}</td>
+          <td>${APPROVAL_STATUS_LABELS[r.approval]}</td>
+          <td>${PAYMENT_STATUS_LABELS[r.paymentStatus]}</td>
+        </tr>`,
+      )
+      .join("");
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8">
+      <title>Inscripciones — VolleyHub PR</title>
+      <style>
+        body { font-family: system-ui, sans-serif; color: #18181b; margin: 32px; }
+        h1 { font-size: 18px; margin: 0 0 4px; }
+        p { color: #71717a; font-size: 12px; margin: 0 0 16px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { border: 1px solid #d4d4d8; padding: 6px 8px; text-align: left; }
+        th { background: #f4f4f5; }
+      </style></head><body>
+      <h1>Inscripciones — VolleyHub PR</h1>
+      <p>${filtered.length} inscripciones · generado ${new Date().toLocaleString("es-PR")}</p>
+      <table><thead><tr>
+        <th>Equipo</th><th>Club</th><th>Torneo</th><th>Categoría</th>
+        <th>Fecha</th><th>Tarifa</th><th>Aprobación</th><th>Pago</th>
+      </tr></thead><tbody>${rows}</tbody></table>
+      </body></html>`);
+    win.document.close();
+    win.focus();
+    win.print();
+  }
+
+  async function deleteRegistration() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/registrations/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error ?? "No se pudo eliminar la inscripción.");
+        return;
+      }
+      setDeleteTarget(null);
+      router.refresh();
+    } catch {
+      setError("Error de conexión. Intenta de nuevo.");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function patch(id: string, body: Record<string, unknown>) {
     setError(null);
@@ -143,6 +244,26 @@ export default function RegistrationsTable({
           <option value="paid">{PAYMENT_STATUS_LABELS.paid}</option>
           <option value="unpaid">{PAYMENT_STATUS_LABELS.unpaid}</option>
         </select>
+        <div className="flex gap-2 sm:ml-auto">
+          <button
+            type="button"
+            className={btnSecondary}
+            onClick={exportCsv}
+            disabled={filtered.length === 0}
+            title="Descarga un CSV que abre en Excel"
+          >
+            ⬇ Excel
+          </button>
+          <button
+            type="button"
+            className={btnSecondary}
+            onClick={printTable}
+            disabled={filtered.length === 0}
+            title="Imprime o guarda como PDF"
+          >
+            🖨 Imprimir / PDF
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -219,12 +340,23 @@ export default function RegistrationsTable({
                     </button>
                   </td>
                   <td className="px-4 py-3">
-                    <Link
-                      href={`/admin/inscripciones/${r.id}`}
-                      className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
-                    >
-                      Ver
-                    </Link>
+                    <div className="flex items-center gap-1">
+                      <Link
+                        href={`/admin/inscripciones/${r.id}`}
+                        className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                      >
+                        Ver
+                      </Link>
+                      <ActionsMenu
+                        actions={[
+                          {
+                            label: "Eliminar inscripción",
+                            danger: true,
+                            onSelect: () => setDeleteTarget(r),
+                          },
+                        ]}
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -232,6 +364,20 @@ export default function RegistrationsTable({
           </table>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Eliminar inscripción"
+        description={
+          deleteTarget
+            ? `Se eliminará la inscripción de ${deleteTarget.teamName} (${deleteTarget.clubName}) y su roster vinculado. Esta acción no se puede deshacer.`
+            : ""
+        }
+        confirmLabel="Eliminar"
+        busy={deleting}
+        onConfirm={deleteRegistration}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

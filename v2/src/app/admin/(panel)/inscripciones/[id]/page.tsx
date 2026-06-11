@@ -1,11 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getRegistration, getRosterByRegistration, getTournament } from "@/lib/store";
-import { categoryLabel, formatDateEs, formatUsd } from "@/lib/types";
+import {
+  APPROVAL_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS,
+  categoryLabel,
+  formatDateEs,
+  formatUsd,
+} from "@/lib/types";
 import { ApprovalStatusChip, PaymentStatusChip } from "@/components/admin/StatusChip";
 import RegistrationEditor from "@/components/admin/RegistrationEditor";
+import PrintRegistrationButton from "@/components/admin/PrintRegistrationButton";
 import { card } from "@/components/admin/ui";
 import type { Coach } from "@/lib/types";
+
+function contactLine(c: Coach): string {
+  return [c.name, c.phone, c.email, c.affiliationNumber].filter(Boolean).join(" · ");
+}
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +64,41 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
           <h1 className="text-2xl font-semibold text-zinc-900">{registration.teamName}</h1>
           <ApprovalStatusChip status={registration.approval} />
           <PaymentStatusChip status={registration.paymentStatus} />
+          <div className="ml-auto">
+            <PrintRegistrationButton
+              data={{
+                teamName: registration.teamName,
+                clubName: registration.clubName,
+                tournamentName: tournament?.name ?? registration.tournamentSlug,
+                categoryLabel:
+                  tournament && category ? categoryLabel(tournament, category) : "—",
+                registeredAt: formatDateEs(registration.registeredAt.slice(0, 10)),
+                fee: formatUsd(registration.feeCents),
+                approvalLabel: APPROVAL_STATUS_LABELS[registration.approval],
+                paymentLabel: PAYMENT_STATUS_LABELS[registration.paymentStatus],
+                repLine: [
+                  registration.representative.name,
+                  registration.representative.phone,
+                  registration.representative.email,
+                  registration.representative.affiliationNumber,
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
+                coachLine: contactLine(registration.coach),
+                assistantLine: registration.assistant
+                  ? contactLine(registration.assistant)
+                  : undefined,
+                signatureName: registration.signatureName,
+                comments: registration.comments || undefined,
+                players: registration.players.map((p) => ({
+                  jerseyNumber: p.jerseyNumber || "—",
+                  name: p.name,
+                  birthDate: formatDateEs(p.birthDate),
+                  affiliationNumber: p.affiliationNumber || "—",
+                })),
+              }}
+            />
+          </div>
         </div>
         <p className="mt-1 text-sm text-zinc-500">
           {registration.clubName} · {tournament?.name ?? registration.tournamentSlug}

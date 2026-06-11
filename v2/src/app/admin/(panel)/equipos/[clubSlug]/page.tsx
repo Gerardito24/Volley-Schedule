@@ -8,6 +8,7 @@ import {
   type TeamRoster,
 } from "@/lib/types";
 import ClubProfileForm from "@/components/admin/ClubProfileForm";
+import DeleteButton from "@/components/admin/DeleteButton";
 import { ApprovalStatusChip, PaymentStatusChip } from "@/components/admin/StatusChip";
 import { card } from "@/components/admin/ui";
 
@@ -64,15 +65,24 @@ export default async function ClubDetailPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/admin/equipos"
-          className="text-sm font-medium text-zinc-500 hover:text-indigo-600"
-        >
-          ← Equipos
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-zinc-900">{club.displayName}</h1>
-        <p className="mt-1 text-sm text-zinc-500">{club.pueblo}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <Link
+            href="/admin/equipos"
+            className="text-sm font-medium text-zinc-500 hover:text-indigo-600"
+          >
+            ← Equipos
+          </Link>
+          <h1 className="mt-2 text-2xl font-semibold text-zinc-900">{club.displayName}</h1>
+          <p className="mt-1 text-sm text-zinc-500">{club.pueblo}</p>
+        </div>
+        <DeleteButton
+          url={`/api/clubs/${clubSlug}`}
+          confirmTitle="Eliminar club"
+          confirmDescription={`Se eliminará el perfil de ${club.displayName} y sus ${rosters.length} equipos guardados. Las inscripciones históricas en los torneos se conservan.`}
+          redirectTo="/admin/equipos"
+          actionLabel="Eliminar club"
+        />
       </div>
 
       <ClubProfileForm club={club} />

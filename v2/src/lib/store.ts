@@ -156,11 +156,24 @@ export async function saveTournament(tournament: Tournament): Promise<void> {
   await writeCollection("tournaments", items);
 }
 
+/** Borra el torneo junto con sus inscripciones y rosters (cascada). */
 export async function deleteTournament(slug: string): Promise<void> {
-  const items = await readCollection("tournaments");
+  const [tournaments, registrations, rosters] = await Promise.all([
+    readCollection("tournaments"),
+    readCollection("registrations"),
+    readCollection("rosters"),
+  ]);
   await writeCollection(
     "tournaments",
-    items.filter((t) => t.slug !== slug),
+    tournaments.filter((t) => t.slug !== slug),
+  );
+  await writeCollection(
+    "registrations",
+    registrations.filter((r) => r.tournamentSlug !== slug),
+  );
+  await writeCollection(
+    "rosters",
+    rosters.filter((r) => r.tournamentSlug !== slug),
   );
 }
 
@@ -193,6 +206,22 @@ export async function saveRegistration(registration: Registration): Promise<void
   if (idx >= 0) items[idx] = next;
   else items.push(next);
   await writeCollection("registrations", items);
+}
+
+/** Borra la inscripción y su roster vinculado. */
+export async function deleteRegistration(id: string): Promise<void> {
+  const [registrations, rosters] = await Promise.all([
+    readCollection("registrations"),
+    readCollection("rosters"),
+  ]);
+  await writeCollection(
+    "registrations",
+    registrations.filter((r) => r.id !== id),
+  );
+  await writeCollection(
+    "rosters",
+    rosters.filter((r) => r.registrationId !== id),
+  );
 }
 
 export async function getClubs(): Promise<ClubProfile[]> {
@@ -241,6 +270,31 @@ export async function saveRoster(roster: TeamRoster): Promise<void> {
   if (idx >= 0) items[idx] = next;
   else items.push(next);
   await writeCollection("rosters", items);
+}
+
+export async function deleteRoster(id: string): Promise<void> {
+  const items = await readCollection("rosters");
+  await writeCollection(
+    "rosters",
+    items.filter((r) => r.id !== id),
+  );
+}
+
+/** Borra el perfil del club y sus rosters guardados. Las inscripciones
+ *  históricas en los torneos se conservan. */
+export async function deleteClub(clubSlug: string): Promise<void> {
+  const [clubs, rosters] = await Promise.all([
+    readCollection("clubs"),
+    readCollection("rosters"),
+  ]);
+  await writeCollection(
+    "clubs",
+    clubs.filter((c) => c.clubSlug !== clubSlug),
+  );
+  await writeCollection(
+    "rosters",
+    rosters.filter((r) => r.clubSlug !== clubSlug),
+  );
 }
 
 export async function getAdmins(): Promise<AdminUser[]> {
