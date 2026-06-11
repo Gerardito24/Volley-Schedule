@@ -8,196 +8,165 @@ Documento de mano para retomar sin perder contexto. **No sustituye** el README d
 - **GitHub:** `https://github.com/Gerardito24/Volley-Schedule`
 - **Rama:** `main` (push a `origin/main`)
 
+## ⚡ Estado actual (jun 2026)
+
+**`v2/` (VolleyHub PR) ES la app de producción.** Los dos proyectos de Vercel apuntan a `v2/` (Root Directory = `v2`). El app original en la raíz del repo quedó **retirado** — se conserva solo como referencia de código.
+
+| Proyecto Vercel | URL | Superficie |
+|---|---|---|
+| `volley-schedule-rb` | volley-schedule-rb.vercel.app | **Público** (website) |
+| `volley-schedule-admin` | volley-schedule-admin.vercel.app | **Admin** (portal) |
+
+Ambos usan el **mismo Postgres de Railway** (tablas con prefijo `vh_`, se crean y siembran solas al primer arranque).
+
 ## HEAD reciente (`git log`)
 
-| Commit     | Descripción breve |
-| ---------- | ----------------- |
-| *(pendiente push)* | **feat(v2):** VolleyHub PR — app nuevo en `v2/` (website + admin local, JSON store, seed demo). |
-| `551443f`  | **feat(ux):** rediseño Portal de Administrador + web pública (app original en raíz). |
-| `17a149e`  | fix(admin): mensaje de error detallado si falla DB. |
-| `ae39bf9`  | docs: visión de producto y contexto Portal de Administrador. |
-| `cc6a8ea`  | fix(admin): elimina bucle login↔admin; redirect `/` → `/admin/login` en surface admin. |
+| Commit | Descripción breve |
+| ------ | ----------------- |
+| `231a552` | Export CSV/imprimir inscripciones + menús ⋯ de borrado (torneo/inscripción/club/roster) |
+| `9b66660` | Roster completo: coach, apoderado y jugadoras con afiliación y nacimiento |
+| `26dc510` | Anotación de partidos **por sets** (25-20 · 23-25 · 15-12) |
+| `4f6a916` | Estado de inscripción dividido: **aprobación** + **pago** independientes |
+| `da241ee` | Upgrade portal admin: equipos por club→categoría, siembra ordenable, bracket visual, agenda general, dashboard operativo |
+| `ce1422c` | Gestión de administradores con IT master protegido |
+| `8db31a2` | Separación público/admin vía `APP_SURFACE` |
+| `eaeeae7` | Sistema de cuentas de clientes (registro público) |
+| `aa04459` | Fix build Turbopack en Vercel (stubs del app raíz) |
+| `e62bb2e` | Store portado de JSON a Postgres (tablas `vh_*`) |
 
 ---
 
-## VolleyHub PR — app nuevo en `v2/` (jun 2026)
+## Variables de entorno en Vercel (CRÍTICO)
 
-**Rediseño desde cero** del website público + Portal de Administrador. Mismo workflow de negocio, arquitectura nueva. **No reemplaza** el app de producción en la raíz del repo (Vercel + Postgres); es un **demo local** para iterar diseño y flujos.
+| Variable | Proyecto público | Proyecto admin | Notas |
+|---|---|---|---|
+| `DATABASE_URL` | ✅ | ✅ | URL **pública** de Railway (`yamabiko.proxy.rlwy.net:56265`), NO la interna |
+| `CLIENT_SESSION_SECRET` | ✅ | ✅ | Firma cookies de clientes; generar con `openssl rand -hex 32` |
+| `APP_SURFACE` | `public` | `admin` | Candado: público no sirve `/admin` y viceversa. Sin definir = todo accesible (dev) |
 
-### Arranque rápido
+Tras cambiar variables: **Redeploy** manual (Deployments → ⋯ → Redeploy).
 
-```powershell
-cd "C:\Dev\volleyschedule-registrations\v2"
-npm install                 # solo la primera vez
-Copy-Item .env.example .env.local   # y edita DATABASE_URL (Postgres)
-npm run dev                 # http://localhost:3001
-```
+### Pendientes de seguridad
 
-| URL | Qué es |
-|-----|--------|
-| http://localhost:3001 | Website público (VolleyHub PR) |
-| http://localhost:3001/admin | Portal de Administrador |
-| http://localhost:3001/admin/login | Login admin |
+1. **Rotar la contraseña de Postgres en Railway** (se compartió en chat) y actualizar `DATABASE_URL` en ambos proyectos Vercel.
+2. Cambiar las credenciales del IT master sembrado (`admin` / `volley2026`): entrar al admin → **Administradores** → Editar tu perfil.
+3. Verificar que `CLIENT_SESSION_SECRET` y `APP_SURFACE` estén puestos en ambos proyectos.
 
-**Credenciales demo:** usuario `admin` · contraseña `volley2026`
+---
 
-**Verificación:** `cd v2 && npm run build` (debe pasar).
+## VolleyHub PR (`v2/`) — funcionalidad
 
-### Arquitectura (a diferencia del app original)
+### Modelo de datos (Postgres, tablas `vh_*`)
 
-```
-Público + Admin  →  API routes (Next.js)  →  Postgres (tablas vh_*)
-                                              ↑ crea tablas + seed al primer arranque
-```
+Cada colección es `(id text PRIMARY KEY, data jsonb)`: `vh_tournaments`, `vh_registrations`, `vh_clubs`, `vh_rosters`, `vh_admins`, `vh_clients`. Cliente en `v2/src/lib/db.ts` (postgres.js); acceso en `v2/src/lib/store.ts`. Reset demo: `TRUNCATE` las tablas `vh_*` y reiniciar — vuelve a sembrar.
 
-- **Una sola fuente de verdad:** **Postgres**. Cada colección es una tabla `vh_<nombre>` con `(id text, data jsonb)`: `vh_tournaments`, `vh_registrations`, `vh_clubs`, `vh_rosters`, `vh_admins`.
-- Cliente en `v2/src/lib/db.ts` (postgres.js, igual driver que el app original); acceso a datos en `v2/src/lib/store.ts`.
-- Prefijo `vh_` para poder **reusar el mismo Postgres** del app de producción sin chocar con sus tablas.
-- **Sin** localStorage para datos de negocio (solo borrador de inscripción en el navegador).
-- **Sin** split Vercel (`NEXT_PUBLIC_APP_SURFACE`); todo en un host, puerto **3001**.
-- Config: copiar `v2/.env.example` → `v2/.env.local` y poner `DATABASE_URL`. Para reset demo: `TRUNCATE` (o borrar) las tablas `vh_*` y reiniciar — v2 vuelve a sembrar.
-- **No requiere migración manual:** las tablas se crean solas en la primera petición.
+**Inscripción — dos dimensiones de estado (independientes):**
+- `approval`: `pending | approved | rejected | waitlisted` — ¿puede jugar?
+- `paymentStatus`: `unpaid | paid` (+ `paidAt`) — ¿pagó?
+- Filas viejas con `status` combinado se migran **al leer** (`normalizeRegistration`); no hay script de migración.
+- Elegible para bracket: aprobado, o pagado mientras está en revisión (`isBracketEligible`).
 
-### Datos demo incluidos (seed)
+**Resultados por sets:** `MatchResult { home, away, sets: [{home, away}], recordedAt }` — sets ganados se derivan del detalle.
 
-| Torneo | Slug | Estado | Notas |
-|--------|------|--------|-------|
-| Copa Isla Invitacional | `copa-isla-invitacional-2026` | cerrado | **EN VIVO hoy** — bracket 8 equipos publicado, cuartos con resultados |
-| Copa 30 Summer | `copa-30-summer-2026` | abierto | 3 categorías, inscripciones de ejemplo |
-| Premier 5C | `premier-5c-2026` | abierto | Bayamón, 12U y 18U mixto |
+**Roster completo:** coach (nombre/tel/afiliación), apoderado (nombre/tel/afiliación), jugadoras (nombre, camisa, nacimiento, afiliación). Rosters viejos se rellenan desde la inscripción original al abrirlos.
 
-8 clubes de pueblos de PR (Caribe VC, Vaqueros, Gigantes, Mets, Criollas, Leonas, Indias, Grises) con rosters completos para probar **reutilizar datos** al inscribir.
+### Cuentas de clientes (público)
 
-### Rutas públicas (`v2/src/app/(public)/`)
+- Registro/login propio: `/cuenta/registro`, `/cuenta/login`, dashboard `/cuenta` ("Mis inscripciones").
+- Cookie `volleyv2_client` (30 días, HMAC con `CLIENT_SESSION_SECRET`); contraseñas con `crypto.scrypt`.
+- Las inscripciones llevan `clientId` opcional; **reutilizar datos** al inscribir requiere login y muestra solo los equipos del cliente (privado).
+- Admin → **Clientes**: lista de cuentas + detalle con sus inscripciones.
+
+### Portal de Administrador
 
 | Ruta | Función |
 |------|---------|
-| `/` | Home: hero, banner EN VIVO, grid de torneos |
-| `/torneos` | Lista de torneos |
-| `/torneos/[slug]` | Detalle: categorías, tarifas, itinerario o empty state |
-| `/torneos/[slug]/inscribir` | Inscripción 3 pasos + reutilizar clubes previos + borrador autosave |
-| `/itinerarios` | Torneos con itinerario publicado y marcadores |
+| `/admin/login` | Login (sin pista de credenciales en producción) |
+| `/admin` | Dashboard operativo: banner EN VIVO, cola "requieren acción", recaudado/por cobrar, inscripciones recientes |
+| `/admin/torneos` | Tabla con ⋯ (abrir, itinerario, **eliminar** con cascada) |
+| `/admin/torneos/nuevo` | Wizard 4 pasos |
+| `/admin/torneos/[slug]?tab=` | resumen \| configuracion \| categorias \| inscripciones \| itinerario |
+| `/admin/torneos/[slug]/itinerario` | Creador: siembra ordenable (↑↓), single elim o pools+bracket, vista **Bracket** visual, **Agenda general** cronológica con detección de conflictos de cancha, anotación **por sets**, publicar |
+| `/admin/inscripciones` | Filtros por aprobación y pago, cambio inline, **⬇ Excel** (CSV), **🖨 Imprimir/PDF**, eliminar |
+| `/admin/inscripciones/[id]` | Detalle + **constancia imprimible** + editor (aprobación/pago/tarifa) |
+| `/admin/equipos` | Clubes con chips de categorías; búsqueda por nombre/pueblo/categoría |
+| `/admin/equipos/[clubSlug]` | Equipos **agrupados por categoría** + eliminar club |
+| `/admin/equipos/[clubSlug]/roster/[id]` | Editor completo (coach/apoderado/jugadoras) + eliminar equipo |
+| `/admin/clientes` y `/admin/clientes/[id]` | Cuentas de clientes y sus inscripciones |
+| `/admin/administradores` | Crear/editar/eliminar operadores. **IT master**: solo se edita a sí mismo, no es eliminable |
+| `/admin/torneos-activos` | Torneos en vivo → anotar resultados |
 
-### Rutas admin (`v2/src/app/admin/`)
-
-| Ruta | Función |
-|------|---------|
-| `/admin/login` | Login (cookie firmada) |
-| `/admin` | Dashboard: métricas + accesos a módulos |
-| `/admin/torneos` | Lista con búsqueda/filtro |
-| `/admin/torneos/nuevo` | Wizard 4 pasos (datos → divisiones/categorías → tarifas → resumen) |
-| `/admin/torneos/[slug]?tab=` | Detalle: resumen \| configuracion \| categorias \| inscripciones \| itinerario |
-| `/admin/torneos/[slug]/itinerario` | Creador de bracket: equipos elegibles, single elim o pools+bracket, horarios/canchas, publicar, anotar resultados |
-| `/admin/inscripciones` | Tabla global con filtros y cambio de status |
-| `/admin/inscripciones/[id]` | Detalle editable |
-| `/admin/equipos` | Clubes con búsqueda |
-| `/admin/equipos/[clubSlug]` | Perfil + equipos |
-| `/admin/equipos/[clubSlug]/roster/[rosterId]` | Editor de roster |
-| `/admin/torneos-activos` | Torneos en vivo con link al creador de itinerario |
-
-### API (`v2/src/app/api/`)
+### API principal (`v2/src/app/api/`)
 
 | Método | Ruta | Auth | Uso |
 |--------|------|------|-----|
-| POST | `/api/auth/login` | — | Sesión admin |
-| POST | `/api/auth/logout` | cookie | Cerrar sesión |
-| GET | `/api/auth/me` | cookie | Operador actual |
-| GET/POST | `/api/tournaments` | POST admin | Listar / crear torneo |
-| GET/PATCH/DELETE | `/api/tournaments/[slug]` | PATCH/DELETE admin | Detalle / editar / borrar |
-| POST | `/api/registrations` | — | Inscripción pública |
-| PATCH | `/api/registrations/[id]` | admin | Cambiar status / editar |
-| GET | `/api/reuse?q=&exclude=` | — | Buscar clubes para reutilizar |
-| PATCH | `/api/clubs/[slug]` | admin | Perfil de club |
-| PATCH | `/api/rosters/[id]` | admin | Editor de roster |
+| POST | `/api/auth/login` `/logout` | — / cookie | Sesión admin (`volleyv2_admin`) |
+| POST/PATCH/DELETE | `/api/admin/operators[/[id]]` | admin | Gestión de administradores |
+| POST | `/api/client/auth/register` `/login` `/logout` `/me` | — | Cuentas de clientes |
+| GET/POST | `/api/tournaments` · GET/PATCH/DELETE `/[slug]` | escritura admin | DELETE = cascada (inscripciones+rosters) |
+| POST | `/api/registrations` | — | Inscripción pública (asocia `clientId` si hay sesión) |
+| PATCH/DELETE | `/api/registrations/[id]` | admin | Editar (estampa `paidAt`) / borrar con roster |
+| GET | `/api/reuse?q=&exclude=` | cliente | Solo equipos del cliente; `requiresLogin:true` sin sesión |
+| PATCH/DELETE | `/api/clubs/[slug]` | admin | Perfil / borrar club+rosters (inscripciones se conservan) |
+| PATCH/DELETE | `/api/rosters/[id]` | admin | Editor / borrar roster |
 
 ### Código clave (`v2/src/lib/`)
 
 | Archivo | Rol |
 |---------|-----|
-| `types.ts` | Modelo de datos + helpers (tarifas, labels, fechas) |
-| `store.ts` | Lectura/escritura JSON + seed al primer arranque |
-| `seed.ts` | Datos demo (torneos, clubes, admin) |
-| `auth.ts` | Cookie de sesión admin |
-| `schedule-engine.ts` | Brackets, pools, asignación de horarios, resolución de ganadores |
+| `types.ts` | Modelo + `normalizeRegistration`, `isBracketEligible`, `formatSetScores`, labels |
+| `store.ts` | Postgres CRUD + seed + deletes en cascada |
+| `seed.ts` | Datos demo (3 torneos, 8 clubes, resultados por sets) |
+| `auth.ts` / `client-auth.ts` | Sesión admin / sesión cliente |
+| `admin-operators.ts` | Reglas IT master / administradores |
+| `schedule-engine.ts` | Brackets, pools, horarios, resolución de ganadores |
+| `../middleware.ts` | Candado `APP_SURFACE` (public/admin/all) |
 
-### Flujo end-to-end recomendado (demo)
+### Notas de build (Vercel + Turbopack)
 
-1. Admin → **Copa 30 Summer** → tab **Itinerario** → generar bracket con inscripciones pagadas/aprobadas → **Publicar**.
-2. Público → **Copa 30 Summer** → **Inscribir** → buscar "Caribe" en reutilizar datos → completar categoría y firma.
-3. Admin → **Inscripciones** → cambiar status a **Pagado** o **Aprobado**.
-4. Público → **Itinerarios** → ver partidos; admin → **Copa Isla** → anotar marcadores en vivo.
-
-### Fuera de alcance en v2 (por diseño)
-
-Import CSV, PDF por email, registro de club `/equipo`, migración Postgres, split de deploys Vercel.
-
-### Documentación adicional
-
-- Detalle técnico: [`v2/README.md`](v2/README.md)
+- Turbopack escanea el repo completo desde `.git` → existen **stubs** en `v2/src/lib/` (`app-surface.ts`, `admin-session-constants.ts`) para que el middleware del app raíz compile. **No borrarlos.**
+- El root `tsconfig.json` excluye `v2/`; v2 tiene su propio middleware.
+- Verificación: `cd v2 && npm run build` (debe pasar limpio).
 
 ---
 
-## App original (raíz del repo) — producción
-
-El app en la **raíz** (`npm run dev` puerto 3000) sigue siendo el de **producción** con Postgres (Railway) y split Vercel.
-
-### Split Vercel — público + admin
-
-| Proyecto | Obligatorias | No poner |
-|----------|--------------|----------|
-| **Público** | `NEXT_PUBLIC_APP_SURFACE=public`, `DATABASE_URL_POOLED`, `NEXT_PUBLIC_ADMIN_APP_URL` | `ADMIN_SESSION_SECRET` |
-| **Admin** | `NEXT_PUBLIC_APP_SURFACE=admin`, `DATABASE_URL_POOLED`, `ADMIN_SESSION_SECRET` | — |
-
-**Admin producción:** `https://volley-schedule-admin.vercel.app`
-
-### UX redesign (jun 2026) — implementado en app original
-
-- Portal de Administrador: design system, sidebar, breadcrumbs, dashboard, wizard torneos, tabs, filtros.
-- Web pública: inscripción por pasos, reutilizar datos, borrador autosave, itinerarios con empty states.
-- Verificación: `npm run build` + `npm test` (74 tests) en la **raíz**.
-
----
-
-## Arranque local — resumen
+## Arranque local
 
 ```powershell
-# App original (producción local, puerto 3000)
-cd "C:\Dev\volleyschedule-registrations"
-npm install
-npm run dev
-
-# VolleyHub PR — demo nuevo (puerto 3001)
 cd "C:\Dev\volleyschedule-registrations\v2"
-npm install
-npm run dev
+npm install                          # solo la primera vez
+Copy-Item .env.example .env.local    # editar DATABASE_URL (+ CLIENT_SESSION_SECRET)
+npm run dev                          # http://localhost:3001
 ```
 
-Simular split del app original (dos terminales):
+| URL | Qué es |
+|-----|--------|
+| http://localhost:3001 | Website público |
+| http://localhost:3001/admin | Portal de Administrador |
 
-```powershell
-# Público (3000)
-$env:NEXT_PUBLIC_APP_SURFACE="public"; $env:NEXT_PUBLIC_ADMIN_APP_URL="http://localhost:3001"; npm run dev
+**Credenciales demo (solo si la DB está recién sembrada):** `admin` / `volley2026`. En producción cámbialas en **Administradores**.
 
-# Admin (3001)
-cd v2   # o el admin original en raíz con surface=admin
-$env:NEXT_PUBLIC_APP_SURFACE="admin"; npm run dev -- -p 3001
-```
+Sin `APP_SURFACE` definido en local se sirve todo (público + admin) en el mismo puerto.
 
 ---
 
-## Próximos pasos (si retomas)
+## Flujo end-to-end (smoke test)
 
-### VolleyV2 (`v2/`)
+1. Público → crear cuenta en `/cuenta/registro` → inscribir equipo en un torneo abierto (apoderado con afiliación, jugadoras completas).
+2. Admin → **Inscripciones** → aprobar y marcar **Pagado** (un click) → ver en dashboard cómo baja "por cobrar".
+3. Admin → torneo → **Itinerario** → ordenar siembra → generar → revisar **Agenda general** (sin conflictos) → **Publicar**.
+4. Anotar un partido **por sets** → ver bracket avanzar → público ve el marcador y los sets en `/itinerarios`.
+5. **⬇ Excel** y **🖨 Imprimir/PDF** desde Inscripciones; constancia desde el detalle.
 
-1. Poner `DATABASE_URL` en `v2/.env.local` y probar flujos en http://localhost:3001 (siembra sola al primer arranque).
-2. Deploy a Vercel: definir `DATABASE_URL` (y/o `DATABASE_URL_POOLED`) en el proyecto; no requiere paso de migración.
-3. Decidir si v2 reemplaza al app original como producción o si se siguen migrando ideas pieza por pieza.
+---
 
-### App original (producción)
+## Próximos pasos (ideas pendientes)
 
-1. Completar **setup IT maestro** en `/admin/setup` si `needsSetup: true`.
-2. Rotar contraseña Postgres si se expuso en chat; actualizar `DATABASE_URL` en Vercel.
-3. Redeploy ambos proyectos Vercel tras commits de UX (`551443f`).
+- Imprimir el itinerario/bracket completo de un torneo (hoy solo inscripciones).
+- Emails de confirmación a clubes (inscripción recibida / aprobada / pago).
+- Editar datos del equipo desde la inscripción (hoy inscripción y roster se editan por separado).
+- Drag-and-drop en la agenda general; filtros por categoría.
+- Retirar el proyecto Vercel sobrante si se decide servir todo desde uno.
 
 ---
 
@@ -205,13 +174,12 @@ $env:NEXT_PUBLIC_APP_SURFACE="admin"; npm run dev -- -p 3001
 
 ```powershell
 git clone https://github.com/Gerardito24/Volley-Schedule.git
-cd Volley-Schedule
-git pull origin main
-npm install          # app original
-cd v2 && npm install # VolleyHub PR
-npm run dev          # desde v2 → puerto 3001
+cd Volley-Schedule\v2
+npm install
+# .env.local con DATABASE_URL y CLIENT_SESSION_SECRET
+npm run dev   # puerto 3001
 ```
 
 ---
 
-*Actualizado jun 2026 — incluye VolleyHub PR (`v2/`) y estado del app original.*
+*Actualizado 11 jun 2026 — v2 es producción (cuentas de clientes, aprobación+pago, sets, roster completo, export/borrado, administradores).*
