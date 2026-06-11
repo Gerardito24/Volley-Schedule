@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getClub, getRoster, getTournament } from "@/lib/store";
+import { getClub, getRegistration, getRoster, getTournament } from "@/lib/store";
+import type { TeamRoster } from "@/lib/types";
 import RosterEditor from "@/components/admin/RosterEditor";
 
 export const dynamic = "force-dynamic";
@@ -14,10 +15,32 @@ export default async function RosterEditorPage({ params }: PageProps) {
   const roster = await getRoster(rosterId);
   if (!roster || roster.clubSlug !== clubSlug) notFound();
 
-  const [club, tournament] = await Promise.all([
+  const [club, tournament, registration] = await Promise.all([
     getClub(clubSlug),
     getTournament(roster.tournamentSlug),
+    getRegistration(roster.registrationId),
   ]);
+
+  // Rosters creados antes del modelo completo: heredar de la inscripción
+  // original los datos que falten (afiliaciones, nacimiento, apoderado).
+  const playerById = new Map(registration?.players.map((p) => [p.id, p]) ?? []);
+  const enriched: TeamRoster = {
+    ...roster,
+    coachAffiliation:
+      roster.coachAffiliation ?? registration?.coach.affiliationNumber,
+    repName: roster.repName ?? registration?.representative.name,
+    repPhone: roster.repPhone ?? registration?.representative.phone,
+    repAffiliation:
+      roster.repAffiliation ?? registration?.representative.affiliationNumber,
+    players: roster.players.map((p) => {
+      const original = playerById.get(p.id);
+      return {
+        ...p,
+        birthDate: p.birthDate ?? original?.birthDate,
+        affiliationNumber: p.affiliationNumber ?? original?.affiliationNumber,
+      };
+    }),
+  };
 
   return (
     <div className="space-y-6">
@@ -43,7 +66,7 @@ export default async function RosterEditorPage({ params }: PageProps) {
         </p>
       </div>
 
-      <RosterEditor roster={roster} />
+      <RosterEditor roster={enriched} />
     </div>
   );
 }

@@ -68,6 +68,7 @@ export interface Representative {
   name: string;
   email: string;
   phone: string;
+  affiliationNumber?: string;
 }
 
 export interface Coach {
@@ -133,6 +134,8 @@ export interface RosterPlayer {
   id: string;
   name: string;
   jerseyNumber?: string;
+  birthDate?: string; // YYYY-MM-DD
+  affiliationNumber?: string;
   position?: string;
 }
 
@@ -146,6 +149,10 @@ export interface TeamRoster {
   categoryId: string;
   coachName: string;
   coachPhone: string;
+  coachAffiliation?: string;
+  repName?: string;
+  repPhone?: string;
+  repAffiliation?: string;
   players: RosterPlayer[];
   updatedAt: string;
 }

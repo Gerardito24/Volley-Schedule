@@ -87,7 +87,13 @@ export default async function RegistrationDetailPage({ params }: PageProps) {
             <dd className="mt-0.5 text-zinc-900">
               {registration.representative.name}
               <span className="block text-xs text-zinc-500">
-                {registration.representative.email} · {registration.representative.phone}
+                {[
+                  registration.representative.email,
+                  registration.representative.phone,
+                  registration.representative.affiliationNumber,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </span>
             </dd>
           </div>

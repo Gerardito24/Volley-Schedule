@@ -32,6 +32,7 @@ interface FormState {
   repName: string;
   repEmail: string;
   repPhone: string;
+  repAffiliation: string;
   coach: CoachForm;
   hasAssistant: boolean;
   assistant: CoachForm;
@@ -59,7 +60,12 @@ interface ReuseEntry {
     tournamentName: string;
     teamName: string;
     coachName: string;
-    representative: { name: string; email: string; phone: string };
+    representative: {
+      name: string;
+      email: string;
+      phone: string;
+      affiliationNumber?: string;
+    };
     coach: ReuseCoach | null;
     assistant: ReuseCoach | null;
     players: {
@@ -103,6 +109,7 @@ const emptyForm = (): FormState => ({
   repName: "",
   repEmail: "",
   repPhone: "",
+  repAffiliation: "",
   coach: emptyCoach(),
   hasAssistant: false,
   assistant: emptyCoach(),
@@ -233,6 +240,7 @@ export default function RegisterForm({ tournament }: { tournament: Tournament })
       repName: last?.representative.name ?? entry.contactName,
       repEmail: last?.representative.email ?? entry.contactEmail,
       repPhone: last?.representative.phone ?? entry.phone ?? "",
+      repAffiliation: last?.representative.affiliationNumber ?? "",
       coach: coachFrom(last?.coach),
       hasAssistant: Boolean(last?.assistant),
       assistant: coachFrom(last?.assistant),
@@ -319,6 +327,7 @@ export default function RegisterForm({ tournament }: { tournament: Tournament })
         name: form.repName.trim(),
         email: form.repEmail.trim(),
         phone: form.repPhone.trim(),
+        affiliationNumber: form.repAffiliation.trim() || undefined,
       },
       coach: cleanCoach(form.coach),
       assistant:
@@ -684,7 +693,7 @@ export default function RegisterForm({ tournament }: { tournament: Tournament })
             <p className="mb-5 text-sm text-zinc-500">
               Persona de contacto responsable del equipo.
             </p>
-            <div className="grid gap-5 sm:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2">
               <div>
                 <label htmlFor="repName" className={LABEL}>
                   Nombre <span className="text-amber-400">*</span>
@@ -723,6 +732,18 @@ export default function RegisterForm({ tournament }: { tournament: Tournament })
                   onChange={(e) => set("repPhone", e.target.value)}
                 />
                 {errors.repPhone && <p className={ERROR_TEXT}>{errors.repPhone}</p>}
+              </div>
+              <div>
+                <label htmlFor="repAffiliation" className={LABEL}>
+                  Núm. afiliación
+                </label>
+                <input
+                  id="repAffiliation"
+                  className={INPUT}
+                  placeholder="FPV-0000"
+                  value={form.repAffiliation}
+                  onChange={(e) => set("repAffiliation", e.target.value)}
+                />
               </div>
             </div>
           </section>

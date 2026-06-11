@@ -167,10 +167,16 @@ export function buildSeedData(): SeedData {
       categoryId: opts.categoryId,
       coachName: reg.coach.name,
       coachPhone: reg.coach.phone,
+      coachAffiliation: reg.coach.affiliationNumber,
+      repName: reg.representative.name,
+      repPhone: reg.representative.phone,
+      repAffiliation: reg.representative.affiliationNumber,
       players: players.map((p) => ({
         id: p.id,
         name: p.name,
         jerseyNumber: p.jerseyNumber,
+        birthDate: p.birthDate,
+        affiliationNumber: p.affiliationNumber,
       })),
       updatedAt: registeredAt,
     });

@@ -91,7 +91,7 @@ export async function POST(request: Request) {
     updatedAt: now,
   });
 
-  // Roster guardado para reutilización futura
+  // Roster guardado para reutilización futura — copia completa de la inscripción
   await saveRoster({
     id: `roster-${randomUUID()}`,
     registrationId: registration.id,
@@ -102,7 +102,17 @@ export async function POST(request: Request) {
     categoryId: category.id,
     coachName: registration.coach.name,
     coachPhone: registration.coach.phone,
-    players: players.map((p) => ({ id: p.id, name: p.name, jerseyNumber: p.jerseyNumber })),
+    coachAffiliation: registration.coach.affiliationNumber,
+    repName: registration.representative.name,
+    repPhone: registration.representative.phone,
+    repAffiliation: registration.representative.affiliationNumber,
+    players: players.map((p) => ({
+      id: p.id,
+      name: p.name,
+      jerseyNumber: p.jerseyNumber,
+      birthDate: p.birthDate,
+      affiliationNumber: p.affiliationNumber,
+    })),
     updatedAt: now,
   });
 
