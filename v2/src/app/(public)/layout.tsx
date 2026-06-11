@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getSessionClient } from "@/lib/client-auth";
 
 const NAV_LINKS = [
   { href: "/", label: "Inicio" },
@@ -25,7 +26,9 @@ function Logo() {
   );
 }
 
-export default function PublicLayout({ children }: { children: React.ReactNode }) {
+export default async function PublicLayout({ children }: { children: React.ReactNode }) {
+  const client = await getSessionClient();
+
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
       <header className="sticky top-0 z-40 border-b border-zinc-800 bg-zinc-950/85 backdrop-blur">
@@ -41,6 +44,21 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
                 {link.label}
               </Link>
             ))}
+            {client ? (
+              <Link
+                href="/cuenta"
+                className="ml-2 rounded-lg px-3 py-1.5 text-sm font-semibold text-amber-400 border border-amber-400/30 transition hover:bg-amber-400/10"
+              >
+                {client.displayName.split(" ")[0]}
+              </Link>
+            ) : (
+              <Link
+                href="/cuenta/login"
+                className="ml-2 rounded-lg px-3 py-1.5 text-sm font-semibold text-zinc-100 border border-zinc-700 transition hover:bg-zinc-800"
+              >
+                Mi cuenta
+              </Link>
+            )}
           </nav>
         </div>
       </header>

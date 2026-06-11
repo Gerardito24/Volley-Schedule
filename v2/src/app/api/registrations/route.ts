@@ -7,6 +7,7 @@ import {
   saveRegistration,
   saveRoster,
 } from "@/lib/store";
+import { getSessionClient } from "@/lib/client-auth";
 import type { Coach, Player, Registration, Representative } from "@/lib/types";
 import { effectiveFeeCents, slugify } from "@/lib/types";
 
@@ -26,7 +27,10 @@ interface SubmitBody {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as SubmitBody | null;
+  const [body, sessionClient] = await Promise.all([
+    request.json().catch(() => null) as Promise<SubmitBody | null>,
+    getSessionClient(),
+  ]);
   if (!body) return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
 
   const tournament = await getTournament(body.tournamentSlug);
@@ -70,6 +74,7 @@ export async function POST(request: Request) {
     feeCents: effectiveFeeCents(tournament, category),
     registeredAt: now,
     updatedAt: now,
+    clientId: sessionClient?.id,
   };
   await saveRegistration(registration);
 

@@ -164,6 +164,7 @@ export default function RegisterForm({ tournament }: { tournament: Tournament })
   const [reuseQuery, setReuseQuery] = useState("");
   const [reuseEntries, setReuseEntries] = useState<ReuseEntry[]>([]);
   const [reuseLoading, setReuseLoading] = useState(false);
+  const [reuseRequiresLogin, setReuseRequiresLogin] = useState(false);
   const [reuseChip, setReuseChip] = useState<string | null>(null);
   const reuseRequestId = useRef(0);
 
@@ -208,8 +209,11 @@ export default function RegisterForm({ tournament }: { tournament: Tournament })
         const res = await fetch(
           `/api/reuse?q=${encodeURIComponent(reuseQuery)}&exclude=${encodeURIComponent(tournament.slug)}`,
         );
-        const data = (await res.json()) as { entries?: ReuseEntry[] };
-        if (reuseRequestId.current === id) setReuseEntries(data.entries ?? []);
+        const data = (await res.json()) as { entries?: ReuseEntry[]; requiresLogin?: boolean };
+        if (reuseRequestId.current === id) {
+          setReuseRequiresLogin(data.requiresLogin ?? false);
+          setReuseEntries(data.entries ?? []);
+        }
       } catch {
         if (reuseRequestId.current === id) setReuseEntries([]);
       } finally {
@@ -529,55 +533,79 @@ export default function RegisterForm({ tournament }: { tournament: Tournament })
               ¿Ya inscribiste un equipo antes?
             </h2>
             <p className="mt-1 text-sm text-zinc-400">
-              Busca tu club y carga los datos de tu última inscripción para no escribir todo de
-              nuevo.
+              Carga los datos de tu última inscripción para no escribir todo de nuevo.
             </p>
-            <input
-              type="search"
-              value={reuseQuery}
-              onChange={(e) => setReuseQuery(e.target.value)}
-              placeholder="Busca por club, pueblo o coach…"
-              className={`${INPUT} mt-4`}
-            />
-            <div className="mt-3 max-h-64 space-y-2 overflow-y-auto thin-scroll">
-              {reuseLoading ? (
-                <p className="px-1 py-2 text-sm text-zinc-500">Buscando…</p>
-              ) : reuseEntries.length === 0 ? (
-                <p className="px-1 py-2 text-sm text-zinc-500">
-                  No encontramos clubes con esa búsqueda.
+
+            {reuseRequiresLogin ? (
+              <div className="mt-4 rounded-xl border border-zinc-700 bg-zinc-950/60 px-4 py-4 text-sm text-zinc-300">
+                <p className="mb-3">
+                  Inicia sesión para ver tus equipos anteriores de forma privada y segura.
                 </p>
-              ) : (
-                reuseEntries.map((entry) => (
-                  <div
-                    key={entry.clubSlug}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3"
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href="/cuenta/login"
+                    className="inline-flex items-center rounded-lg bg-amber-400 px-4 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-amber-300"
                   >
-                    <div className="min-w-0">
-                      <p className="font-semibold text-zinc-100">
-                        {entry.clubName}
-                        {entry.pueblo && (
-                          <span className="ml-2 text-sm font-normal text-zinc-500">
-                            {entry.pueblo}
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-zinc-500">
-                        {entry.contactName}
-                        {entry.lastRegistration &&
-                          ` · Última inscripción: ${entry.lastRegistration.tournamentName}`}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => applyReuse(entry)}
-                      className="shrink-0 rounded-lg border border-amber-400/50 px-3 py-1.5 text-xs font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-zinc-950"
-                    >
-                      Usar estos datos
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
+                    Iniciar sesión
+                  </Link>
+                  <Link
+                    href="/cuenta/registro"
+                    className="inline-flex items-center rounded-lg border border-zinc-600 px-4 py-2 text-xs font-semibold text-zinc-300 transition hover:border-amber-400 hover:text-amber-400"
+                  >
+                    Crear cuenta
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="search"
+                  value={reuseQuery}
+                  onChange={(e) => setReuseQuery(e.target.value)}
+                  placeholder="Busca por club, pueblo o coach…"
+                  className={`${INPUT} mt-4`}
+                />
+                <div className="mt-3 max-h-64 space-y-2 overflow-y-auto thin-scroll">
+                  {reuseLoading ? (
+                    <p className="px-1 py-2 text-sm text-zinc-500">Buscando…</p>
+                  ) : reuseEntries.length === 0 ? (
+                    <p className="px-1 py-2 text-sm text-zinc-500">
+                      No encontramos inscripciones anteriores.
+                    </p>
+                  ) : (
+                    reuseEntries.map((entry) => (
+                      <div
+                        key={entry.clubSlug}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-semibold text-zinc-100">
+                            {entry.clubName}
+                            {entry.pueblo && (
+                              <span className="ml-2 text-sm font-normal text-zinc-500">
+                                {entry.pueblo}
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-zinc-500">
+                            {entry.contactName}
+                            {entry.lastRegistration &&
+                              ` · Última inscripción: ${entry.lastRegistration.tournamentName}`}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => applyReuse(entry)}
+                          className="shrink-0 rounded-lg border border-amber-400/50 px-3 py-1.5 text-xs font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-zinc-950"
+                        >
+                          Usar estos datos
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
           </section>
 
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">

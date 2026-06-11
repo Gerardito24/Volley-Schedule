@@ -97,6 +97,8 @@ export interface Registration {
   feeCents: number;
   registeredAt: string; // ISO — orden de siembra del bracket
   updatedAt: string;
+  /** ID del cliente que realizó la inscripción (undefined = anónima) */
+  clientId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -201,6 +203,20 @@ export interface CategorySchedule {
 export interface TournamentSchedule {
   published: boolean;
   categories: CategorySchedule[];
+}
+
+// ---------------------------------------------------------------------------
+// Clientes (cuentas públicas)
+// ---------------------------------------------------------------------------
+
+export interface Client {
+  id: string;
+  email: string;
+  displayName: string;
+  phone?: string;
+  passwordHash: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ---------------------------------------------------------------------------

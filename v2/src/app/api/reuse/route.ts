@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getClubs, getRegistrations, getTournaments } from "@/lib/store";
+import { getSessionClient } from "@/lib/client-auth";
 
 export interface ReuseEntry {
   clubSlug: string;
@@ -8,7 +9,6 @@ export interface ReuseEntry {
   contactName: string;
   contactEmail: string;
   phone?: string;
-  /** Última inscripción del club (la más reciente) con datos completos para precargar */
   lastRegistration: {
     id: string;
     tournamentName: string;
@@ -22,6 +22,12 @@ export interface ReuseEntry {
 }
 
 export async function GET(request: Request) {
+  // Solo clientes autenticados pueden ver sus datos anteriores
+  const client = await getSessionClient();
+  if (!client) {
+    return NextResponse.json({ entries: [], requiresLogin: true });
+  }
+
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("q") ?? "").trim().toLowerCase();
   const exclude = searchParams.get("exclude") ?? "";
@@ -33,9 +39,18 @@ export async function GET(request: Request) {
   ]);
   const tournamentNames = new Map(tournaments.map((t) => [t.slug, t.name]));
 
-  const entries: ReuseEntry[] = clubs.map((club) => {
-    const past = registrations
-      .filter((r) => r.clubSlug === club.clubSlug && r.tournamentSlug !== exclude)
+  // Solo inscripciones de este cliente
+  const clientRegs = registrations.filter(
+    (r) => r.clientId === client.id && r.tournamentSlug !== exclude,
+  );
+
+  // Clubes que este cliente ha inscrito
+  const clientClubSlugs = new Set(clientRegs.map((r) => r.clubSlug));
+  const clientClubs = clubs.filter((c) => clientClubSlugs.has(c.clubSlug));
+
+  const entries: ReuseEntry[] = clientClubs.map((club) => {
+    const past = clientRegs
+      .filter((r) => r.clubSlug === club.clubSlug)
       .sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
     const last = past[0];
     return {
@@ -74,5 +89,5 @@ export async function GET(request: Request) {
       )
     : entries;
 
-  return NextResponse.json({ entries: filtered });
+  return NextResponse.json({ entries: filtered, requiresLogin: false });
 }

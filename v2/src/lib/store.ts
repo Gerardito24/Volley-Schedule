@@ -1,5 +1,6 @@
 import type {
   AdminUser,
+  Client,
   ClubProfile,
   Registration,
   TeamRoster,
@@ -19,7 +20,8 @@ type CollectionName =
   | "registrations"
   | "clubs"
   | "rosters"
-  | "admins";
+  | "admins"
+  | "clients";
 
 interface CollectionTypes {
   tournaments: Tournament;
@@ -27,6 +29,7 @@ interface CollectionTypes {
   clubs: ClubProfile;
   rosters: TeamRoster;
   admins: AdminUser;
+  clients: Client;
 }
 
 const COLLECTIONS: CollectionName[] = [
@@ -35,6 +38,7 @@ const COLLECTIONS: CollectionName[] = [
   "clubs",
   "rosters",
   "admins",
+  "clients",
 ];
 
 function tableFor(name: CollectionName): string {
@@ -237,4 +241,31 @@ export async function saveRoster(roster: TeamRoster): Promise<void> {
 
 export async function getAdmins(): Promise<AdminUser[]> {
   return readCollection("admins");
+}
+
+// ---------------------------------------------------------------------------
+// Clientes (cuentas públicas)
+// ---------------------------------------------------------------------------
+
+export async function getClients(): Promise<Client[]> {
+  return readCollection("clients");
+}
+
+export async function getClient(id: string): Promise<Client | null> {
+  const items = await readCollection("clients");
+  return items.find((c) => c.id === id) ?? null;
+}
+
+export async function getClientByEmail(email: string): Promise<Client | null> {
+  const items = await readCollection("clients");
+  return items.find((c) => c.email.toLowerCase() === email.toLowerCase()) ?? null;
+}
+
+export async function saveClient(client: Client): Promise<void> {
+  const items = await readCollection("clients");
+  const idx = items.findIndex((c) => c.id === client.id);
+  const next = { ...client, updatedAt: new Date().toISOString() };
+  if (idx >= 0) items[idx] = next;
+  else items.push(next);
+  await writeCollection("clients", items);
 }
