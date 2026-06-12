@@ -319,13 +319,13 @@ export default function ScorerApp({ token, operatorName, tournament }: Props) {
 
   const [activeCatIdx, setActiveCatIdx] = useState(0);
 
-  if (!schedule || !schedule.published) {
+  if (!schedule || schedule.categories.length === 0) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center px-4 text-center">
         <div className="rounded-2xl border border-zinc-200 bg-white p-10 shadow-sm">
-          <p className="text-lg font-semibold text-zinc-900">Itinerario no publicado</p>
+          <p className="text-lg font-semibold text-zinc-900">Itinerario no generado</p>
           <p className="mt-2 text-sm text-zinc-500">
-            El itinerario de este torneo aún no está disponible.
+            Genera el itinerario desde el portal de administración antes de anotar.
           </p>
         </div>
       </div>
