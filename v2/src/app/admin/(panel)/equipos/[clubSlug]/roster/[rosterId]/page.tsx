@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getClub, getRegistration, getRoster, getTournament } from "@/lib/store";
-import type { TeamRoster } from "@/lib/types";
+import { categoryLabel, type TeamRoster } from "@/lib/types";
 import RosterEditor from "@/components/admin/RosterEditor";
 import DeleteButton from "@/components/admin/DeleteButton";
 
@@ -21,6 +21,9 @@ export default async function RosterEditorPage({ params }: PageProps) {
     getTournament(roster.tournamentSlug),
     getRegistration(roster.registrationId),
   ]);
+
+  const category = tournament?.categories.find((c) => c.id === roster.categoryId);
+  const catLabel = tournament && category ? categoryLabel(tournament, category) : null;
 
   // Rosters creados antes del modelo completo: heredar de la inscripción
   // original los datos que falten (afiliaciones, nacimiento, apoderado).
@@ -66,6 +69,11 @@ export default async function RosterEditorPage({ params }: PageProps) {
             <p className="mt-1 text-sm text-zinc-500">
               {roster.clubName}
               {tournament ? ` · ${tournament.name}` : ""}
+              {catLabel ? (
+                <span className="ml-2 inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200">
+                  {catLabel}
+                </span>
+              ) : null}
             </p>
           </div>
           <DeleteButton
