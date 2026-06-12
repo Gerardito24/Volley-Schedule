@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getRegistrations, getTournament } from "@/lib/store";
+import { getRegistrations, getScorerLinks, getTournament } from "@/lib/store";
 import ScheduleWorkspace from "@/components/admin/ScheduleWorkspace";
+import ScorerLinksSection from "@/components/admin/ScorerLinksSection";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,11 @@ export default async function ItinerarioPage({
   const { slug } = await params;
   const tournament = await getTournament(slug);
   if (!tournament) notFound();
-  const registrations = await getRegistrations({ tournamentSlug: slug });
+  const [registrations, scorerLinks] = await Promise.all([
+    getRegistrations({ tournamentSlug: slug }),
+    getScorerLinks({ tournamentSlug: slug }),
+  ]);
+  const safeLinks = scorerLinks.map(({ pinHash: _, ...l }) => l);
 
   return (
     <div className="space-y-6">
@@ -42,6 +47,7 @@ export default async function ItinerarioPage({
         </p>
       </div>
       <ScheduleWorkspace tournament={tournament} registrations={registrations} />
+      <ScorerLinksSection tournamentSlug={slug} initialLinks={safeLinks} />
     </div>
   );
 }

@@ -49,8 +49,13 @@ export function middleware(req: NextRequest) {
   }
 
   // surface === "admin": solo se sirve el portal y las API routes.
-  // Cualquier página pública redirige al portal.
-  if (isAdminPath(pathname) || pathname.startsWith("/api/")) {
+  // /anotar también pasa — es accesible desde ambos dominios (los anotadores
+  // no necesitan acceso admin).
+  if (
+    isAdminPath(pathname) ||
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/anotar/")
+  ) {
     return NextResponse.next();
   }
   const adminHome = req.nextUrl.clone();

@@ -3,6 +3,7 @@ import type {
   Client,
   ClubProfile,
   Registration,
+  ScorerLink,
   TeamRoster,
   Tournament,
 } from "./types";
@@ -22,7 +23,8 @@ type CollectionName =
   | "clubs"
   | "rosters"
   | "admins"
-  | "clients";
+  | "clients"
+  | "scorer_links";
 
 interface CollectionTypes {
   tournaments: Tournament;
@@ -31,6 +33,7 @@ interface CollectionTypes {
   rosters: TeamRoster;
   admins: AdminUser;
   clients: Client;
+  scorer_links: ScorerLink;
 }
 
 const COLLECTIONS: CollectionName[] = [
@@ -40,6 +43,7 @@ const COLLECTIONS: CollectionName[] = [
   "rosters",
   "admins",
   "clients",
+  "scorer_links",
 ];
 
 function tableFor(name: CollectionName): string {
@@ -156,12 +160,13 @@ export async function saveTournament(tournament: Tournament): Promise<void> {
   await writeCollection("tournaments", items);
 }
 
-/** Borra el torneo junto con sus inscripciones y rosters (cascada). */
+/** Borra el torneo junto con sus inscripciones, rosters y enlaces de anotador (cascada). */
 export async function deleteTournament(slug: string): Promise<void> {
-  const [tournaments, registrations, rosters] = await Promise.all([
+  const [tournaments, registrations, rosters, scorerLinks] = await Promise.all([
     readCollection("tournaments"),
     readCollection("registrations"),
     readCollection("rosters"),
+    readCollection("scorer_links"),
   ]);
   await writeCollection(
     "tournaments",
@@ -174,6 +179,10 @@ export async function deleteTournament(slug: string): Promise<void> {
   await writeCollection(
     "rosters",
     rosters.filter((r) => r.tournamentSlug !== slug),
+  );
+  await writeCollection(
+    "scorer_links",
+    scorerLinks.filter((s) => s.tournamentSlug !== slug),
   );
 }
 
@@ -353,4 +362,39 @@ export async function saveClient(client: Client): Promise<void> {
   if (idx >= 0) items[idx] = next;
   else items.push(next);
   await writeCollection("clients", items);
+}
+
+// ---------------------------------------------------------------------------
+// Scorer links
+// ---------------------------------------------------------------------------
+
+export async function getScorerLinks(filter?: {
+  tournamentSlug?: string;
+}): Promise<ScorerLink[]> {
+  let items = await readCollection("scorer_links");
+  if (filter?.tournamentSlug) {
+    items = items.filter((s) => s.tournamentSlug === filter.tournamentSlug);
+  }
+  return items.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function getScorerLink(id: string): Promise<ScorerLink | null> {
+  const items = await readCollection("scorer_links");
+  return items.find((s) => s.id === id) ?? null;
+}
+
+export async function saveScorerLink(link: ScorerLink): Promise<void> {
+  const items = await readCollection("scorer_links");
+  const idx = items.findIndex((s) => s.id === link.id);
+  if (idx >= 0) items[idx] = link;
+  else items.push(link);
+  await writeCollection("scorer_links", items);
+}
+
+export async function deleteScorerLink(id: string): Promise<void> {
+  const items = await readCollection("scorer_links");
+  await writeCollection(
+    "scorer_links",
+    items.filter((s) => s.id !== id),
+  );
 }

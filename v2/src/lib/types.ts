@@ -257,6 +257,18 @@ export interface Client {
 }
 
 // ---------------------------------------------------------------------------
+// Scorer links (enlaces de anotador compartibles)
+// ---------------------------------------------------------------------------
+
+export interface ScorerLink {
+  id: string;             // token aleatorio = parte de la URL
+  tournamentSlug: string;
+  name: string;           // etiqueta del operador, p. ej. "Ana – Cancha 1"
+  pinHash: string;        // scrypt hash del PIN de 4 dígitos
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
 // Admin
 // ---------------------------------------------------------------------------
 
