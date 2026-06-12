@@ -4,7 +4,6 @@ import { getClients, getClubs, getRegistrations, getTournaments } from "@/lib/st
 import {
   categoryLabel,
   formatDateRangeEs,
-  formatUsd,
   isTournamentLive,
 } from "@/lib/types";
 import { ApprovalStatusChip, PaymentStatusChip } from "@/components/admin/StatusChip";
@@ -34,13 +33,6 @@ export default async function AdminDashboardPage() {
     .sort((a, b) => b.registeredAt.localeCompare(a.registeredAt))
     .slice(0, 6);
 
-  const collectedCents = registrations
-    .filter((r) => r.paymentStatus === "paid")
-    .reduce((sum, r) => sum + r.feeCents, 0);
-  const pendingCents = registrations
-    .filter((r) => r.paymentStatus === "unpaid" && r.approval !== "rejected")
-    .reduce((sum, r) => sum + r.feeCents, 0);
-
   const metrics = [
     { label: "Torneos abiertos", value: String(openTournaments), href: "/admin/torneos" },
     {
@@ -49,8 +41,6 @@ export default async function AdminDashboardPage() {
       href: "/admin/inscripciones",
       highlight: needsAction.length > 0,
     },
-    { label: "Recaudado", value: formatUsd(collectedCents), href: "/admin/inscripciones" },
-    { label: "Por cobrar", value: formatUsd(pendingCents), href: "/admin/inscripciones" },
     { label: "Clubes", value: String(clubs.length), href: "/admin/equipos" },
     { label: "Clientes", value: String(clients.length), href: "/admin/clientes" },
   ];
@@ -116,7 +106,7 @@ export default async function AdminDashboardPage() {
       ) : null}
 
       {/* Métricas */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {metrics.map((m) => (
           <Link
             key={m.label}
