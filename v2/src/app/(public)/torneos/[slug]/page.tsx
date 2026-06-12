@@ -39,6 +39,16 @@ export default async function TorneoDetallePage({
     <div className="mx-auto max-w-6xl px-4 pb-20">
       {/* Hero */}
       <header className="py-12 sm:py-16">
+        {tournament.promoImageDataUrl ? (
+          <div className="mb-8 overflow-hidden rounded-3xl border border-zinc-800">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={tournament.promoImageDataUrl}
+              alt={tournament.name}
+              className="h-56 w-full object-cover sm:h-80"
+            />
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center gap-3">
           <StatusChip tournament={tournament} />
           <span className="text-sm font-medium text-amber-400/90">

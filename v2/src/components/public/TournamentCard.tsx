@@ -44,7 +44,21 @@ export default function TournamentCard({ tournament }: { tournament: Tournament 
   const categoriesCount = tournament.categories.length;
 
   return (
-    <article className="flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900 p-6 transition hover:border-zinc-700">
+    <article className="flex flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 transition hover:border-zinc-700">
+      {tournament.promoImageDataUrl ? (
+        <Link
+          href={`/torneos/${tournament.slug}`}
+          className="block aspect-[2/1] overflow-hidden border-b border-zinc-800"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={tournament.promoImageDataUrl}
+            alt={tournament.name}
+            className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]"
+          />
+        </Link>
+      ) : null}
+      <div className="flex flex-1 flex-col p-6">
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-xl font-bold tracking-tight text-zinc-100">
           <Link href={`/torneos/${tournament.slug}`} className="hover:text-amber-400">
@@ -97,6 +111,7 @@ export default function TournamentCard({ tournament }: { tournament: Tournament 
           Ver torneo
         </Link>
       )}
+      </div>
     </article>
   );
 }

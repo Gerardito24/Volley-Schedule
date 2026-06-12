@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Tournament, TournamentStatus, Venue } from "@/lib/types";
 import ConfirmDialog from "./ConfirmDialog";
+import TournamentImageInput from "./TournamentImageInput";
 import { btnDanger, btnPrimary, card, inputClass, labelClass } from "./ui";
 
 interface VenueRow {
@@ -39,6 +40,9 @@ export default function TournamentConfigForm({ tournament }: { tournament: Tourn
   const [baseFeeUsd, setBaseFeeUsd] = useState(centsToUsdInput(tournament.baseFeeCents));
   const [publicFeeUsd, setPublicFeeUsd] = useState(
     centsToUsdInput(tournament.publicEntryFeeCents),
+  );
+  const [promoImage, setPromoImage] = useState<string | null>(
+    tournament.promoImageDataUrl ?? null,
   );
 
   const [saving, setSaving] = useState(false);
@@ -98,6 +102,7 @@ export default function TournamentConfigForm({ tournament }: { tournament: Tourn
           venues: venuesBody,
           baseFeeCents: parseUsdToCents(baseFeeUsd),
           publicEntryFeeCents: parseUsdToCents(publicFeeUsd),
+          promoImageDataUrl: promoImage,
         }),
       });
       if (!res.ok) {
@@ -220,6 +225,10 @@ export default function TournamentConfigForm({ tournament }: { tournament: Tourn
               placeholder="Gratis"
             />
           </div>
+        </div>
+
+        <div className="mt-5">
+          <TournamentImageInput value={promoImage} onChange={setPromoImage} />
         </div>
 
         <div className="mt-5">

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Category, Division, Gender, Tournament, Venue } from "@/lib/types";
 import { GENDER_LABELS, formatDateEs, formatUsd } from "@/lib/types";
+import TournamentImageInput from "./TournamentImageInput";
 import { btnPrimary, btnSecondary, card, inputClass, labelClass } from "./ui";
 
 interface VenueRow {
@@ -78,6 +79,9 @@ export default function NewTournamentWizard() {
   // Paso 3
   const [baseFeeUsd, setBaseFeeUsd] = useState("");
   const [publicFeeUsd, setPublicFeeUsd] = useState("");
+
+  // Imagen promocional (paso 1)
+  const [promoImage, setPromoImage] = useState<string | null>(null);
 
   function updateVenue(key: string, patch: Partial<VenueRow>) {
     setVenues((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -237,6 +241,7 @@ export default function NewTournamentWizard() {
         categories: categoriesBody,
         baseFeeCents: parseUsdToCents(baseFeeUsd),
         publicEntryFeeCents: parseUsdToCents(publicFeeUsd),
+        promoImageDataUrl: promoImage,
       };
 
       const res = await fetch("/api/tournaments", {
@@ -324,6 +329,9 @@ export default function NewTournamentWizard() {
                   className={inputClass}
                   placeholder="Detalles del torneo para la página pública…"
                 />
+              </div>
+              <div className="sm:col-span-2">
+                <TournamentImageInput value={promoImage} onChange={setPromoImage} />
               </div>
               <div>
                 <label className={labelClass}>Fecha de inicio *</label>
